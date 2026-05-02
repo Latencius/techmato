@@ -1,4 +1,11 @@
 import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+export const DEFAULT_PROMPTS_PATH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../../../docs/PROMPTS.md",
+);
 
 export type PromptSection = {
   system?: string | undefined;
@@ -37,10 +44,8 @@ function extractH2Section(markdown: string, h2Title: string): string {
   const startPattern = new RegExp(`^##\\s+${escapedTitle}\\s*$`, "m");
   const startMatch = startPattern.exec(markdown);
 
-  if (!startMatch?.index) {
-    if (startMatch?.index !== 0) {
-      throw new Error(`Prompt section "${h2Title}" was not found`);
-    }
+  if (!startMatch) {
+    throw new Error(`Prompt section "${h2Title}" was not found`);
   }
 
   const startIndex = startMatch.index + startMatch[0].length;

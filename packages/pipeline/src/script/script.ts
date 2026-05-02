@@ -1,0 +1,237 @@
+import Anthropic from "@anthropic-ai/sdk";
+import type { MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages";
+import type { Article, BroadcastScript, ScriptSegment } from "@techmato/types";
+import { err, ok, type Result } from "neverthrow";
+import { DEFAULT_PROMPTS_PATH, loadPromptSection } from "../prompts/load.js";
+
+const MODEL = "claude-sonnet-4-6";
+const SCRIPT_LENGTH_LIMIT = 400;
+const SCRIPT_SHORT_LENGTH_WARN = 250;
+
+export type ScriptError =
+  | { type: "api_error"; message: string; cause?: unknown }
+  | { type: "invalid_response"; message: string }
+  | { type: "length_violation"; message: string; actual: number; limit: number };
+
+type MessageContentBlock = {
+  type: string;
+  text?: string;
+};
+
+export async function generateScript(
+  articles: Article[],
+  now: Date = new Date(),
+): Promise<Result<BroadcastScript, ScriptError>> {
+  try {
+    const firstPrompt = await loadPromptSection(DEFAULT_PROMPTS_PATH, "2. 台本生成プロンプト", {
+      CURRENT_TIME: formatJstHour(now),
+      STORIES_JSON: JSON.stringify(toPromptStories(articles), null, 2),
+    });
+    const firstScriptResult = await requestScript(firstPrompt.system, firstPrompt.user);
+
+    if (!firstScriptResult) {
+      return err({
+        type: "invalid_response",
+        message: "Claude returned malformed script JSON",
+      });
+    }
+
+    const firstLength = countScriptCharacters(firstScriptResult);
+
+    if (firstLength < SCRIPT_SHORT_LENGTH_WARN) {
+      console.warn(`Generated script is shorter than expected: ${firstLength} characters`);
+    }
+
+    if (firstLength <= SCRIPT_LENGTH_LIMIT) {
+      return ok(firstScriptResult);
+    }
+
+    const retryPrompt = await loadPromptSection(DEFAULT_PROMPTS_PATH, "3. 短縮再生成プロンプト", {
+      CHAR_COUNT: String(firstLength),
+      SCRIPT_JSON: JSON.stringify(firstScriptResult, null, 2),
+    });
+    const retryScriptResult = await requestScript(retryPrompt.system, retryPrompt.user);
+
+    if (!retryScriptResult) {
+      return err({
+        type: "invalid_response",
+        message: "Claude returned malformed shortened script JSON",
+      });
+    }
+
+    const retryLength = countScriptCharacters(retryScriptResult);
+
+    if (retryLength > SCRIPT_LENGTH_LIMIT) {
+      return err({
+        type: "length_violation",
+        message: `Generated script is ${retryLength} characters, exceeding ${SCRIPT_LENGTH_LIMIT}`,
+        actual: retryLength,
+        limit: SCRIPT_LENGTH_LIMIT,
+      });
+    }
+
+    if (retryLength < SCRIPT_SHORT_LENGTH_WARN) {
+      console.warn(`Generated script is shorter than expected: ${retryLength} characters`);
+    }
+
+    return ok(retryScriptResult);
+  } catch (cause) {
+    return err({
+      type: "api_error",
+      message: cause instanceof Error ? cause.message : "Failed to generate script",
+      cause,
+    });
+  }
+}
+
+async function requestScript(
+  system: string | undefined,
+  user: string,
+): Promise<BroadcastScript | undefined> {
+  const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+  });
+  const request: MessageCreateParamsNonStreaming = {
+    model: MODEL,
+    max_tokens: 2048,
+    temperature: 0.5,
+    messages: [{ role: "user", content: user }],
+    output_config: {
+      format: {
+        type: "json_schema",
+        schema: scriptSchema,
+      },
+    },
+  };
+
+  if (system) {
+    request.system = system;
+  }
+
+  const message = await anthropic.messages.create(request);
+
+  return parseScriptResponse(extractText(message.content));
+}
+
+function toPromptStories(articles: Article[]) {
+  return articles.map((article) => ({
+    title: article.title,
+    url: article.url,
+    content: article.content ?? "",
+  }));
+}
+
+function formatJstHour(now: Date): string {
+  const parts = new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    hour: "numeric",
+    hour12: false,
+  }).formatToParts(now);
+  const hour = parts.find((part) => part.type === "hour")?.value ?? "0";
+
+  return `${hour}時`;
+}
+
+function extractText(content: unknown): string {
+  if (!Array.isArray(content)) {
+    return "";
+  }
+
+  return content
+    .map((block: MessageContentBlock) => (block.type === "text" ? (block.text ?? "") : ""))
+    .join("\n")
+    .trim();
+}
+
+function parseScriptResponse(text: string): BroadcastScript | undefined {
+  try {
+    const parsed = JSON.parse(stripJsonFence(text)) as Partial<BroadcastScript>;
+
+    if (
+      typeof parsed.opening !== "string" ||
+      typeof parsed.closing !== "string" ||
+      !Array.isArray(parsed.segments)
+    ) {
+      return undefined;
+    }
+
+    const segments = parseSegments(parsed.segments);
+
+    if (!segments) {
+      return undefined;
+    }
+
+    return {
+      opening: parsed.opening,
+      segments,
+      closing: parsed.closing,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function parseSegments(segments: unknown[]): ScriptSegment[] | undefined {
+  const parsedSegments: ScriptSegment[] = [];
+
+  for (const segment of segments) {
+    if (
+      typeof segment !== "object" ||
+      segment === null ||
+      !("title" in segment) ||
+      !("url" in segment) ||
+      !("narration" in segment) ||
+      typeof segment.title !== "string" ||
+      typeof segment.url !== "string" ||
+      typeof segment.narration !== "string"
+    ) {
+      return undefined;
+    }
+
+    parsedSegments.push({
+      title: segment.title,
+      url: segment.url,
+      narration: segment.narration,
+    });
+  }
+
+  return parsedSegments;
+}
+
+function stripJsonFence(text: string): string {
+  const trimmed = text.trim();
+  const fenced = /^```(?:json)?\s*([\s\S]*?)\s*```$/i.exec(trimmed);
+
+  return fenced?.[1]?.trim() ?? trimmed;
+}
+
+function countScriptCharacters(script: BroadcastScript): number {
+  return (
+    script.opening.length +
+    script.segments.reduce((sum, segment) => sum + segment.narration.length, 0) +
+    script.closing.length
+  );
+}
+
+const scriptSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["opening", "segments", "closing"],
+  properties: {
+    opening: { type: "string" },
+    segments: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["title", "url", "narration"],
+        properties: {
+          title: { type: "string" },
+          url: { type: "string" },
+          narration: { type: "string" },
+        },
+      },
+    },
+    closing: { type: "string" },
+  },
+};

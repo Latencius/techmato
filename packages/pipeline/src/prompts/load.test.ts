@@ -1,8 +1,8 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { loadPromptSection, renderPromptTemplate } from "./load.js";
+import { DEFAULT_PROMPTS_PATH, loadPromptSection, renderPromptTemplate } from "./load.js";
 
 const markdown = `# Prompts
 
@@ -42,6 +42,13 @@ describe("renderPromptTemplate", () => {
 });
 
 describe("loadPromptSection", () => {
+  it("exports the default prompts path used at runtime", async () => {
+    const prompts = await readFile(DEFAULT_PROMPTS_PATH, "utf8");
+
+    expect(prompts).toContain("## 1. 記事選定プロンプト");
+    expect(prompts).toContain("## 2. 台本生成プロンプト");
+  });
+
   it("cuts out a H2 section and extracts System/User code blocks", async () => {
     const dir = await mkdtemp(join(tmpdir(), "techmato-prompts-"));
     const filePath = join(dir, "PROMPTS.md");

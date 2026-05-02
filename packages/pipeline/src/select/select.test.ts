@@ -88,6 +88,9 @@ describe("selectArticles", () => {
     expect(request.system).toContain("ニュース編集者");
     expect(request.messages[0].content).toContain('"summary": "First summary"');
     expect(request.messages[0].content).not.toContain("Full text should not be sent");
+    expect(
+      request.output_config.format.schema.properties.selected.items.properties.reason.maxLength,
+    ).toBe(20);
   });
 
   it("skips duplicate and out-of-range indexes with warnings", async () => {

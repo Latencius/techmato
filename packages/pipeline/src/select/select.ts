@@ -1,12 +1,10 @@
-import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages";
 import type { Article } from "@techmato/types";
 import { err, ok, type Result } from "neverthrow";
-import { loadPromptSection } from "../prompts/load.js";
+import { DEFAULT_PROMPTS_PATH, loadPromptSection } from "../prompts/load.js";
 
 const MODEL = "claude-sonnet-4-6";
-const PROMPTS_PATH = join(process.cwd(), "docs", "PROMPTS.md");
 
 export type Selection = {
   article: Article;
@@ -38,7 +36,7 @@ export async function selectArticles(
   count = 4,
 ): Promise<Result<Selection[], SelectError>> {
   try {
-    const prompt = await loadPromptSection(PROMPTS_PATH, "1. 記事選定プロンプト", {
+    const prompt = await loadPromptSection(DEFAULT_PROMPTS_PATH, "1. 記事選定プロンプト", {
       N: String(count),
       ARTICLES_JSON: JSON.stringify(toPromptArticles(articles), null, 2),
     });
@@ -190,7 +188,7 @@ const selectionSchema = {
         required: ["index", "reason"],
         properties: {
           index: { type: "integer" },
-          reason: { type: "string" },
+          reason: { type: "string", maxLength: 20 },
         },
       },
     },
