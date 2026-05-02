@@ -65,6 +65,19 @@ describe("loadPromptSection", () => {
     });
   });
 
+  it("handles a section whose H2 starts at file index 0", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "techmato-prompts-"));
+    const filePath = join(dir, "PROMPTS.md");
+    await writeFile(filePath, "## Foo\n\n### User\n```\nbody\n```", "utf8");
+
+    const prompt = await loadPromptSection(filePath, "Foo", {});
+
+    expect(prompt).toEqual({
+      system: undefined,
+      user: "body",
+    });
+  });
+
   it("returns undefined for a missing System block", async () => {
     const dir = await mkdtemp(join(tmpdir(), "techmato-prompts-"));
     const filePath = join(dir, "PROMPTS.md");

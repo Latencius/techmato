@@ -7,3 +7,5 @@ export { selectArticles } from "./select/select.js";
 export { fetchAllSources, fetchSourceArticles } from "./sources/fetch.js";
 export type { NewsSource } from "./sources/registry.js";
 export { SOURCES } from "./sources/registry.js";
+export type { TtsCue, TtsCueKind, TtsError, TtsManifest, TtsOptions } from "./tts/tts.js";
+export { synthesizeScript } from "./tts/tts.js";
