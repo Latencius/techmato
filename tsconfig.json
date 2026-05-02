@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/types" },
     { "path": "./packages/pipeline" },
-    { "path": "./apps/cli" }
+    { "path": "./apps/cli" },
+    { "path": "./apps/web" }
   ]
 }

@@ -78,6 +78,24 @@ describe("synthesizeScript", () => {
     expect(firstSynthesisBody.speedScale).toBe(1.2);
   });
 
+  it("reports cue completion after each WAV file is written", async () => {
+    const outputDir = await makeTempDir();
+    const onCueComplete = vi.fn();
+    mockVoicevoxSuccess(makeFakeWav());
+
+    const result = await synthesizeScript(script, { outputDir, onCueComplete });
+
+    expect(result.isOk()).toBe(true);
+    expect(onCueComplete).toHaveBeenCalledTimes(4);
+    expect(onCueComplete.mock.calls).toEqual([
+      [0, 4],
+      [1, 4],
+      [2, 4],
+      [3, 4],
+    ]);
+    await expect(stat(join(outputDir, "voice-004.wav"))).resolves.toBeTruthy();
+  });
+
   it("uses custom baseUrl and speaker in VOICEVOX requests", async () => {
     const outputDir = await makeTempDir();
     const fetchMock = mockVoicevoxSuccess(makeFakeWav());

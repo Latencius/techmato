@@ -1,5 +1,6 @@
 export type Logger = {
   step(message: string): void;
+  info(message: string): void;
   warn(message: string): void;
   error(message: string): void;
 };
@@ -11,6 +12,9 @@ export function createLogger({ totalSteps }: { totalSteps: number }): Logger {
     step(message) {
       currentStep += 1;
       console.log(`${prefix()} [step ${currentStep}/${totalSteps}] ${message}`);
+    },
+    info(message) {
+      console.log(`${prefix()} [info] ${message}`);
     },
     warn(message) {
       console.warn(`${prefix()} [warn] ${message}`);

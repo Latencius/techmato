@@ -9,6 +9,7 @@ export type TtsOptions = {
   speaker?: number;
   speedScale?: number;
   outputDir: string;
+  onCueComplete?: (cueIndex: number, totalCues: number) => void;
 };
 
 export type TtsCueKind = "opening" | "segment" | "closing";
@@ -115,6 +116,7 @@ export async function synthesizeScript(
       ...cueInput,
       durationSec,
     });
+    options.onCueComplete?.(cueInput.index, cueInputs.length);
   }
 
   return ok({
