@@ -5,7 +5,7 @@ export type CliOptions = {
   maxStories: number;
   voicevox: string;
   gapMs: number;
-  outputRoot: string;
+  outputRoot: string | null;
 };
 
 export type ParseArgsResult = { ok: true; value: CliOptions } | { ok: false; message: string };
@@ -26,7 +26,7 @@ export function parseArgs(argv: string[]): ParseArgsResult {
     maxStories: 4,
     voicevox: process.env.VOICEVOX_BASE_URL ?? "http://localhost:50021",
     gapMs: 300,
-    outputRoot: resolve("output"),
+    outputRoot: null,
   };
 
   for (let index = 0; index < argv.length; index += 1) {

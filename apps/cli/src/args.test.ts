@@ -11,7 +11,7 @@ describe("parseArgs", () => {
         maxStories: 4,
         voicevox: "http://localhost:50021",
         gapMs: 300,
-        outputRoot: resolve("output"),
+        outputRoot: null,
       },
     });
   });

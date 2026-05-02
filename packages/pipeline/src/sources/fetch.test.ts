@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fetchSourceArticles } from "./fetch.js";
+import { fetchAllSources, fetchSourceArticles } from "./fetch.js";
 import type { NewsSource } from "./registry.js";
 
 describe("fetchSourceArticles", () => {
@@ -65,5 +65,37 @@ describe("fetchSourceArticles", () => {
     };
 
     await expect(fetchSourceArticles(source, parser)).resolves.toEqual([]);
+  });
+});
+
+describe("fetchAllSources", () => {
+  it("reports the failing source id when a source fetch fails", async () => {
+    const sources: NewsSource[] = [
+      {
+        id: "openai",
+        name: "OpenAI",
+        rssUrl: "https://example.com/openai.xml",
+        language: "en",
+        priority: "high",
+        enabled: true,
+      },
+    ];
+    const parser = {
+      parseURL: async () => {
+        throw new Error("Status code 404");
+      },
+    };
+
+    const result = await fetchAllSources(sources, new Date("2026-05-03T00:00:00.000Z"), parser);
+
+    expect(result).toEqual({
+      articles: [],
+      failures: [
+        {
+          source: "openai",
+          error: "Status code 404",
+        },
+      ],
+    });
   });
 });

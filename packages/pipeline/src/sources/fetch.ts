@@ -59,23 +59,32 @@ export async function fetchAllSources(
   parser: RssParserLike = new Parser(),
 ): Promise<{ articles: Article[]; failures: { source: string; error: string }[] }> {
   const enabledSources = sources.filter((source) => source.enabled);
-  const results = await Promise.allSettled(
-    enabledSources.map(async (source) => ({
-      source,
-      articles: await fetchSourceArticles(source, parser),
-    })),
+  const results = await Promise.all(
+    enabledSources.map(async (source) => {
+      try {
+        return {
+          source,
+          articles: await fetchSourceArticles(source, parser),
+        };
+      } catch (error) {
+        return {
+          source,
+          error,
+        };
+      }
+    }),
   );
 
   const articles: Article[] = [];
   const failures: { source: string; error: string }[] = [];
 
   for (const result of results) {
-    if (result.status === "fulfilled") {
-      articles.push(...result.value.articles);
+    if ("articles" in result) {
+      articles.push(...result.articles);
     } else {
       failures.push({
-        source: "unknown",
-        error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+        source: result.source.id,
+        error: result.error instanceof Error ? result.error.message : String(result.error),
       });
     }
   }

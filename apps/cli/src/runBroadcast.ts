@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   type Article,
   extractFullContent,
@@ -31,7 +32,8 @@ export async function runBroadcast(options: CliOptions): Promise<number> {
   const logger = createLogger({ totalSteps: TOTAL_STEPS });
   const generatedAt = new Date();
   const broadcastId = formatOutputTimestamp(generatedAt);
-  const outputDir = join(options.outputRoot, broadcastId);
+  const outputRoot = options.outputRoot ?? defaultOutputRoot();
+  const outputDir = join(outputRoot, broadcastId);
 
   try {
     await mkdir(outputDir, { recursive: true });
@@ -169,6 +171,12 @@ function enrichSelections(
     ...selection,
     article: enrichedByUrl.get(selection.article.url) ?? selection.article,
   }));
+}
+
+function defaultOutputRoot(): string {
+  const here = fileURLToPath(import.meta.url);
+
+  return resolve(dirname(here), "../../../output");
 }
 
 function writeResultError(
