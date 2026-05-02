@@ -1,5 +1,13 @@
 export type { Article, Broadcast, BroadcastScript } from "@techmato/types";
 export { extractArticleContent, extractFullContent } from "./extract/extract.js";
+export type {
+  FfmpegRunner,
+  MergeError,
+  MergeOptions,
+  MergeResult,
+  SegmentMetadata,
+} from "./merge/merge.js";
+export { mergeBroadcast } from "./merge/merge.js";
 export type { ScriptError } from "./script/script.js";
 export { generateScript } from "./script/script.js";
 export type { SelectError, Selection } from "./select/select.js";
