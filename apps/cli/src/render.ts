@@ -137,6 +137,10 @@ export function formatJstOffset(date: Date): string {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}+09:00`;
 }
 
+export function formatOutputTimestamp(date: Date): string {
+  return formatJstOffset(date).replace("+09:00", "").replaceAll(":", "-");
+}
+
 function jstParts(date: Date): {
   year: string;
   month: string;

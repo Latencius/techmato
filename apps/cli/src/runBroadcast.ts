@@ -18,6 +18,7 @@ import { createLogger } from "./logger.js";
 import {
   buildSegmentMetadata,
   formatJstOffset,
+  formatOutputTimestamp,
   formatSegmentsJson,
   formatStoriesJson,
   type MissingArticleMatchError,
@@ -168,10 +169,6 @@ function enrichSelections(
     ...selection,
     article: enrichedByUrl.get(selection.article.url) ?? selection.article,
   }));
-}
-
-function formatOutputTimestamp(date: Date): string {
-  return formatJstOffset(date).replaceAll(":", "-").replace("+09:00", "");
 }
 
 function writeResultError(

@@ -2,6 +2,7 @@ import type { Article, BroadcastScript, MergeResult, Selection } from "@techmato
 import { describe, expect, it } from "vitest";
 import {
   buildSegmentMetadata,
+  formatOutputTimestamp,
   formatSegmentsJson,
   formatStoriesJson,
   renderScriptText,
@@ -173,5 +174,18 @@ describe("formatSegmentsJson", () => {
       generatedAt: "2026-05-02T17:30:00+09:00",
       segments: mergeResult.segments,
     });
+  });
+});
+
+describe("formatOutputTimestamp", () => {
+  it("strips the timezone suffix and replaces colons with hyphens", () => {
+    expect(formatOutputTimestamp(generatedAt)).toBe("2026-05-02T17-30-00");
+  });
+
+  it("does not leave plus-sign timezone fragments in the output", () => {
+    const result = formatOutputTimestamp(generatedAt);
+
+    expect(result).not.toContain("+");
+    expect(result).not.toMatch(/09-00$/);
   });
 });
