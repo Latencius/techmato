@@ -1,0 +1,23 @@
+{
+  "name": "@techmato/pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "@techmato/types": "workspace:*",
+    "jsdom": "^29.1.1",
+    "neverthrow": "^8.2.0",
+    "rss-parser": "^3.13.0"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^28.0.1"
+  }
+}
