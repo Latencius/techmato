@@ -138,6 +138,34 @@ describe("runBroadcast", () => {
     ).resolves.toContain("broadcast.wav");
   });
 
+  it("uses caller-provided broadcast id and generated time", async () => {
+    const outputRoot = await makeTempDir();
+    const events: ProgressEvent[] = [];
+    mockSuccessfulPipeline();
+
+    const result = await runBroadcast({
+      speaker: 3,
+      maxStories: 4,
+      voicevox: "http://localhost:50021",
+      gapMs: 300,
+      outputRoot,
+      broadcastId: "custom-id",
+      generatedAt: new Date("2026-05-03T03:00:00.000Z"),
+      onProgress: (event) => events.push(event),
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value.broadcastId).toBe("custom-id");
+    expect(result.value.outputDir).toBe(join(outputRoot, "custom-id"));
+    await expect(readFile(join(result.value.outputDir, "script.txt"), "utf8")).resolves.toContain(
+      "generated: 2026-05-03T12:00:00+09:00",
+    );
+    expect(events.at(-1)).toMatchObject({ type: "done", broadcastId: "custom-id" });
+  });
+
   it("emits error and stops when select fails", async () => {
     const outputRoot = await makeTempDir();
     const events: ProgressEvent[] = [];

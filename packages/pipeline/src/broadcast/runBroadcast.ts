@@ -2,16 +2,10 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Article } from "@techmato/types";
 import { err, ok, type Result } from "neverthrow";
-import { extractFullContent } from "../extract/extract.js";
 import type { MergeError } from "../merge/merge.js";
-import { mergeBroadcast } from "../merge/merge.js";
 import type { ScriptError } from "../script/script.js";
-import { generateScript } from "../script/script.js";
 import type { SelectError, Selection } from "../select/select.js";
-import { selectArticles } from "../select/select.js";
-import { fetchAllSources } from "../sources/fetch.js";
 import type { TtsError } from "../tts/tts.js";
-import { synthesizeScript } from "../tts/tts.js";
 import type { ProgressEvent, ProgressEventStep } from "./progressEvents.js";
 import {
   buildSegmentMetadata,
@@ -28,6 +22,8 @@ export type RunBroadcastOptions = {
   voicevox: string;
   gapMs: number;
   outputRoot: string;
+  broadcastId?: string;
+  generatedAt?: Date;
   onProgress?: (event: ProgressEvent) => void;
 };
 
@@ -57,8 +53,14 @@ const TOTAL_STEPS = 7;
 export async function runBroadcast(
   options: RunBroadcastOptions,
 ): Promise<Result<RunBroadcastSuccess, RunBroadcastError>> {
-  const generatedAt = new Date();
-  const broadcastId = formatOutputTimestamp(generatedAt);
+  const { extractFullContent } = await import("../extract/extract.js");
+  const { mergeBroadcast } = await import("../merge/merge.js");
+  const { generateScript } = await import("../script/script.js");
+  const { selectArticles } = await import("../select/select.js");
+  const { fetchAllSources } = await import("../sources/fetch.js");
+  const { synthesizeScript } = await import("../tts/tts.js");
+  const generatedAt = options.generatedAt ?? new Date();
+  const broadcastId = options.broadcastId ?? formatOutputTimestamp(generatedAt);
   const outputDir = join(options.outputRoot, broadcastId);
 
   const start = (step: ProgressEventStep) =>

@@ -1,8 +1,7 @@
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   formatJstOffset,
   type ProgressEvent,
+  resolveDefaultOutputRoot,
   runBroadcast as runPipelineBroadcast,
 } from "@techmato/pipeline";
 import type { CliOptions } from "./args.js";
@@ -26,7 +25,7 @@ export async function runBroadcast(options: CliOptions): Promise<number> {
     maxStories: options.maxStories,
     voicevox: options.voicevox,
     gapMs: options.gapMs,
-    outputRoot: options.outputRoot ?? defaultOutputRoot(),
+    outputRoot: options.outputRoot ?? resolveDefaultOutputRoot(import.meta),
     onProgress: (event) => handleProgress(event, logger),
   });
 
@@ -64,10 +63,4 @@ function formatProgressError(event: Extract<ProgressEvent, { type: "error" }>): 
   const cause = event.cause ? ` (${event.cause})` : "";
 
   return `[${event.stage}] ${event.message}${cause}`;
-}
-
-function defaultOutputRoot(): string {
-  const here = fileURLToPath(import.meta.url);
-
-  return resolve(dirname(here), "../../../output");
 }
