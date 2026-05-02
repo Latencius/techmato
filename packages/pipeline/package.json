@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
     "@mozilla/readability": "^0.6.0",
     "@techmato/types": "workspace:*",
     "jsdom": "^29.1.1",

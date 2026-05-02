@@ -71,6 +71,8 @@ pnpm cli          # CLI実行(Phase 1)
 pnpm test
 pnpm lint
 
+# Windows では PowerShell の実行ポリシーで pnpm.ps1 が止まることがあるため pnpm.cmd を使う
+
 # VOICEVOX起動
 docker compose -f infra/voicevox/docker-compose.yml up -d
 ```
