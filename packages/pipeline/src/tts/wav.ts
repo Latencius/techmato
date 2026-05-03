@@ -1,4 +1,77 @@
+export type WavParts = {
+  header: Uint8Array;
+  data: Uint8Array;
+  sampleRate: number;
+  channels: number;
+  bitsPerSample: number;
+};
+
 export function parseWavDurationSec(buffer: Uint8Array): number {
+  const metadata = readWavMetadata(buffer);
+  const bytesPerSecond = metadata.sampleRate * metadata.channels * (metadata.bitsPerSample / 8);
+
+  if (bytesPerSecond <= 0) {
+    throw new Error("Invalid WAV byte rate");
+  }
+
+  return metadata.dataSize / bytesPerSecond;
+}
+
+export function splitWav(buffer: Uint8Array): WavParts {
+  const metadata = readWavMetadata(buffer);
+
+  return {
+    header: buffer.slice(0, metadata.dataOffset),
+    data: buffer.slice(metadata.dataOffset, metadata.dataOffset + metadata.dataSize),
+    sampleRate: metadata.sampleRate,
+    channels: metadata.channels,
+    bitsPerSample: metadata.bitsPerSample,
+  };
+}
+
+export function concatWav(parts: WavParts[]): Uint8Array {
+  const first = parts[0];
+
+  if (!first) {
+    throw new Error("Cannot concatenate empty WAV parts");
+  }
+
+  for (const part of parts) {
+    if (
+      part.sampleRate !== first.sampleRate ||
+      part.channels !== first.channels ||
+      part.bitsPerSample !== first.bitsPerSample
+    ) {
+      throw new Error("Cannot concatenate WAV files with different formats");
+    }
+  }
+
+  const dataSize = parts.reduce((sum, part) => sum + part.data.length, 0);
+  const output = new Uint8Array(first.header.length + dataSize);
+  output.set(first.header, 0);
+
+  let offset = first.header.length;
+  for (const part of parts) {
+    output.set(part.data, offset);
+    offset += part.data.length;
+  }
+
+  const view = new DataView(output.buffer, output.byteOffset, output.byteLength);
+  view.setUint32(4, output.length - 8, true);
+  view.setUint32(first.header.length - 4, dataSize, true);
+
+  return output;
+}
+
+type WavMetadata = {
+  sampleRate: number;
+  channels: number;
+  bitsPerSample: number;
+  dataOffset: number;
+  dataSize: number;
+};
+
+function readWavMetadata(buffer: Uint8Array): WavMetadata {
   if (buffer.length < 12) {
     throw new Error("Invalid WAV header");
   }
@@ -18,6 +91,7 @@ export function parseWavDurationSec(buffer: Uint8Array): number {
   let channels: number | undefined;
   let bitsPerSample: number | undefined;
   let dataSize: number | undefined;
+  let dataOffset: number | undefined;
 
   while (offset + 8 <= buffer.length) {
     const chunkId = readAscii(buffer, offset, 4);
@@ -46,22 +120,23 @@ export function parseWavDurationSec(buffer: Uint8Array): number {
 
     if (chunkId === "data") {
       dataSize = chunkSize;
+      dataOffset = chunkDataOffset;
     }
 
     offset = chunkDataOffset + chunkSize + (chunkSize % 2);
   }
 
-  if (!sampleRate || !channels || !bitsPerSample || dataSize === undefined) {
+  if (
+    !sampleRate ||
+    !channels ||
+    !bitsPerSample ||
+    dataOffset === undefined ||
+    dataSize === undefined
+  ) {
     throw new Error("Invalid WAV missing fmt or data chunk");
   }
 
-  const bytesPerSecond = sampleRate * channels * (bitsPerSample / 8);
-
-  if (bytesPerSecond <= 0) {
-    throw new Error("Invalid WAV byte rate");
-  }
-
-  return dataSize / bytesPerSecond;
+  return { sampleRate, channels, bitsPerSample, dataOffset, dataSize };
 }
 
 function readAscii(buffer: Uint8Array, offset: number, length: number): string {

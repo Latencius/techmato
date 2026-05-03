@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { BroadcastScript } from "@techmato/types";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { synthesizeScript } from "./tts.js";
+import { splitJapaneseSentences, synthesizeScript } from "./tts.js";
 
 const script: BroadcastScript = {
   opening: "こんにちは。今日のニュースです。",
@@ -26,6 +26,18 @@ const singleCueScript: BroadcastScript = {
   opening: "こんにちは。",
   segments: [],
   closing: "",
+};
+
+const chunkedScript: BroadcastScript = {
+  opening: "オープニングです。",
+  segments: [
+    {
+      title: "Long",
+      url: "https://example.com/long",
+      narration: "一つ目の文です。二つ目の文です",
+    },
+  ],
+  closing: "クロージングです。",
 };
 
 let tempDirs: string[] = [];
@@ -54,8 +66,8 @@ describe("synthesizeScript", () => {
     if (result.isErr()) {
       throw new Error(result.error.message);
     }
-    expect(fetchMock).toHaveBeenCalledTimes(8);
-    expect(result.value.totalDurationSec).toBeCloseTo(6, 5);
+    expect(fetchMock).toHaveBeenCalledTimes(10);
+    expect(result.value.totalDurationSec).toBeCloseTo(7.5, 5);
     expect(result.value.cues.map((cue) => cue.kind)).toEqual([
       "opening",
       "segment",
@@ -113,7 +125,7 @@ describe("synthesizeScript", () => {
     });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(
-      "http://voicevox.test:50021/audio_query?text=%E3%81%93%E3%82%93%E3%81%AB%E3%81%A1%E3%81%AF%E3%80%82%E4%BB%8A%E6%97%A5%E3%81%AE%E3%83%8B%E3%83%A5%E3%83%BC%E3%82%B9%E3%81%A7%E3%81%99%E3%80%82&speaker=8",
+      "http://voicevox.test:50021/audio_query?text=%E3%81%93%E3%82%93%E3%81%AB%E3%81%A1%E3%81%AF%E3%80%82&speaker=8",
     );
     expect(fetchMock.mock.calls[1]?.[0]).toBe("http://voicevox.test:50021/synthesis?speaker=8");
   });
@@ -201,6 +213,8 @@ describe("synthesizeScript", () => {
       .mockResolvedValueOnce(jsonResponse({ accentPhrases: [] }))
       .mockResolvedValueOnce(wavResponse(makeFakeWav()))
       .mockResolvedValueOnce(jsonResponse({ accentPhrases: [] }))
+      .mockResolvedValueOnce(wavResponse(makeFakeWav()))
+      .mockResolvedValueOnce(jsonResponse({ accentPhrases: [] }))
       .mockResolvedValueOnce(new Response("synthesis boom", { status: 400 }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -230,6 +244,56 @@ describe("synthesizeScript", () => {
     expect(result.isOk()).toBe(true);
     await expect(stat(outputDir)).resolves.toBeTruthy();
     await expect(stat(join(outputDir, "voice-001.wav"))).resolves.toBeTruthy();
+  });
+
+  it("synthesizes multi-sentence cues as sentence chunks and concatenates WAV output", async () => {
+    const outputDir = await makeTempDir();
+    const fetchMock = vi
+      .fn<() => Promise<Response>>()
+      .mockResolvedValueOnce(jsonResponse({ accentPhrases: [] }))
+      .mockResolvedValueOnce(wavResponse(makeFakeWav(24_000, 1, 16, 1)))
+      .mockResolvedValueOnce(jsonResponse({ accentPhrases: [] }))
+      .mockResolvedValueOnce(wavResponse(makeFakeWav(24_000, 1, 16, 1.25)))
+      .mockResolvedValueOnce(jsonResponse({ accentPhrases: [] }))
+      .mockResolvedValueOnce(wavResponse(makeFakeWav(24_000, 1, 16, 1.5)))
+      .mockResolvedValueOnce(jsonResponse({ accentPhrases: [] }))
+      .mockResolvedValueOnce(wavResponse(makeFakeWav(24_000, 1, 16, 0.75)));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await synthesizeScript(chunkedScript, { outputDir });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(8);
+    expect(result.value.totalDurationSec).toBeCloseTo(4.5, 5);
+    expect(result.value.cues[1]?.durationSec).toBeCloseTo(2.75, 5);
+  });
+});
+
+describe("splitJapaneseSentences", () => {
+  it("keeps Japanese periods on each chunk", () => {
+    expect(splitJapaneseSentences("AはBだ。CはDだ。")).toEqual(["AはBだ。", "CはDだ。"]);
+  });
+
+  it("returns one chunk when there is no Japanese period", () => {
+    expect(splitJapaneseSentences("句点なし")).toEqual(["句点なし"]);
+  });
+
+  it("returns no chunks for blank text", () => {
+    expect(splitJapaneseSentences("")).toEqual([]);
+  });
+
+  it("keeps the final chunk without a trailing Japanese period", () => {
+    expect(splitJapaneseSentences("AはBだ。CはDだ")).toEqual(["AはBだ。", "CはDだ"]);
+  });
+
+  it("does not split on half-width periods", () => {
+    expect(splitJapaneseSentences("URL は example.com です。次の文。")).toEqual([
+      "URL は example.com です。",
+      "次の文。",
+    ]);
   });
 });
 

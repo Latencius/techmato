@@ -2,7 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { BroadcastScript } from "@techmato/types";
 import { err, ok, type Result } from "neverthrow";
-import { parseWavDurationSec } from "./wav.js";
+import { concatWav, parseWavDurationSec, splitWav } from "./wav.js";
 
 export type TtsOptions = {
   baseUrl?: string;
@@ -138,17 +138,11 @@ async function synthesizeCue({
   speaker: number;
   speedScale: number;
 }): Promise<Result<TtsCue, TtsError>> {
-  const audioQueryResult = await requestAudioQuery(baseUrl, speaker, cueInput.text);
-
-  if (audioQueryResult.isErr()) {
-    return err(audioQueryResult.error);
-  }
-
-  const query = {
-    ...audioQueryResult.value,
-    speedScale,
-  };
-  const synthesisResult = await requestSynthesis(baseUrl, speaker, cueInput.text, query);
+  const chunks = splitJapaneseSentences(cueInput.text);
+  const synthesisResult =
+    chunks.length <= 1
+      ? await synthesizeText(baseUrl, speaker, cueInput.text, speedScale)
+      : await synthesizeChunks(baseUrl, speaker, cueInput.text, chunks, speedScale);
 
   if (synthesisResult.isErr()) {
     return err(synthesisResult.error);
@@ -182,6 +176,66 @@ async function synthesizeCue({
     ...cueInput,
     durationSec,
   });
+}
+
+async function synthesizeChunks(
+  baseUrl: string,
+  speaker: number,
+  cueText: string,
+  chunks: string[],
+  speedScale: number,
+): Promise<Result<Uint8Array, TtsError>> {
+  const parts = [];
+
+  for (const chunk of chunks) {
+    const chunkResult = await synthesizeText(baseUrl, speaker, chunk, speedScale);
+
+    if (chunkResult.isErr()) {
+      return err({ ...chunkResult.error, text: cueText });
+    }
+
+    try {
+      parts.push(splitWav(chunkResult.value));
+    } catch (cause) {
+      return err({
+        type: "synthesis_failed",
+        text: cueText,
+        status: 200,
+        message: cause instanceof Error ? cause.message : "Invalid WAV response",
+      });
+    }
+  }
+
+  try {
+    return ok(concatWav(parts));
+  } catch (cause) {
+    return err({
+      type: "synthesis_failed",
+      text: cueText,
+      status: 200,
+      message: cause instanceof Error ? cause.message : "Invalid WAV response",
+    });
+  }
+}
+
+async function synthesizeText(
+  baseUrl: string,
+  speaker: number,
+  text: string,
+  speedScale: number,
+): Promise<Result<Uint8Array, TtsError>> {
+  const audioQueryResult = await requestAudioQuery(baseUrl, speaker, text);
+
+  if (audioQueryResult.isErr()) {
+    return err(audioQueryResult.error);
+  }
+
+  const query = {
+    ...audioQueryResult.value,
+    speedScale,
+  };
+
+  return requestSynthesis(baseUrl, speaker, text, query);
 }
 
 function buildCueInputs(script: BroadcastScript, outputDir: string): CueInput[] {
@@ -306,6 +360,21 @@ async function responseMessage(response: Response): Promise<string> {
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, "");
+}
+
+export function splitJapaneseSentences(text: string): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const matches = trimmed.match(/[^。]+。?/g);
+
+  if (!matches) {
+    return [trimmed];
+  }
+
+  return matches.map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 0);
 }
 
 function sleep(ms: number): Promise<void> {

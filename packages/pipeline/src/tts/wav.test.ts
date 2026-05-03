@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseWavDurationSec } from "./wav.js";
+import { concatWav, parseWavDurationSec, splitWav } from "./wav.js";
 
 function makeFakeWav(
   sampleRate = 24_000,
@@ -42,5 +42,39 @@ describe("parseWavDurationSec", () => {
     wav.set(new TextEncoder().encode("NOPE"), 0);
 
     expect(() => parseWavDurationSec(wav)).toThrow("Invalid WAV RIFF header");
+  });
+});
+
+describe("splitWav", () => {
+  it("splits a PCM WAV into header, data, and format metadata", () => {
+    const wav = makeFakeWav(24_000, 1, 16, 1.5);
+    const parts = splitWav(wav);
+
+    expect(parts.header).toHaveLength(44);
+    expect(parts.data).toHaveLength(24_000 * 2 * 1.5);
+    expect(parts.sampleRate).toBe(24_000);
+    expect(parts.channels).toBe(1);
+    expect(parts.bitsPerSample).toBe(16);
+  });
+});
+
+describe("concatWav", () => {
+  it("concatenates PCM data and rewrites WAV sizes", () => {
+    const wav = concatWav([
+      splitWav(makeFakeWav(24_000, 1, 16, 1.5)),
+      splitWav(makeFakeWav(24_000, 1, 16, 1.5)),
+      splitWav(makeFakeWav(24_000, 1, 16, 1.5)),
+    ]);
+
+    expect(parseWavDurationSec(wav)).toBeCloseTo(4.5, 5);
+    expect(new DataView(wav.buffer, wav.byteOffset, wav.byteLength).getUint32(40, true)).toBe(
+      24_000 * 2 * 4.5,
+    );
+  });
+
+  it("throws when WAV formats differ", () => {
+    expect(() => concatWav([splitWav(makeFakeWav(24_000)), splitWav(makeFakeWav(48_000))])).toThrow(
+      "Cannot concatenate WAV files with different formats",
+    );
   });
 });
