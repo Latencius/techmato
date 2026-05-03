@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { startBroadcast } from "./broadcastApi.js";
+import { fetchBroadcast, startBroadcast } from "./broadcastApi.js";
 
 describe("startBroadcast", () => {
   afterEach(() => {
@@ -55,6 +55,55 @@ describe("startBroadcast", () => {
       ok: false,
       reason: "error",
       message: "network down",
+    });
+  });
+});
+
+describe("fetchBroadcast", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns metadata for a completed broadcast", async () => {
+    const body = {
+      broadcastId: "broadcast-1",
+      status: "completed",
+      startedAt: "2026-05-03T12:00:00+09:00",
+      completedAt: "2026-05-03T12:01:00+09:00",
+      metadata: {
+        segments: {
+          id: "broadcast-1",
+          audioFile: "broadcast.wav",
+          audioUrl: "broadcast.wav",
+          durationSec: 12,
+          generatedAt: "2026-05-03T12:00:00+09:00",
+          segments: [],
+        },
+        stories: {
+          selectedAt: "2026-05-03T12:00:00+09:00",
+          stories: [],
+        },
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, body)));
+
+    await expect(fetchBroadcast("broadcast-1")).resolves.toEqual({ ok: true, data: body });
+    expect(fetch).toHaveBeenCalledWith("/api/broadcast/broadcast-1");
+  });
+
+  it("returns not_found for a 404 response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(404, { error: "missing" })));
+
+    await expect(fetchBroadcast("missing")).resolves.toEqual({ ok: false, reason: "not_found" });
+  });
+
+  it("returns an error message for non-200/404 responses", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(500, { error: "boom" })));
+
+    await expect(fetchBroadcast("broadcast-1")).resolves.toEqual({
+      ok: false,
+      reason: "error",
+      message: "boom",
     });
   });
 });

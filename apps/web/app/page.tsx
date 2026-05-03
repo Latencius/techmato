@@ -14,14 +14,14 @@ export default function Home() {
         <div className="grid gap-10 py-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)] lg:items-center">
           <div>
             <p className="mb-5 inline-flex border border-[#d8cfbd] bg-[#fffaf0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#756b5e]">
-              Phase 2 / Step C
+              Phase 2 / MVP
             </p>
             <h1 className="max-w-3xl text-5xl font-semibold leading-tight md:text-7xl">
               今日のテックニュースを、声で受け取る。
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-[#4f4a42]">
               ボタンを押すとニュース取得から台本生成、音声合成までをサーバーで実行します。
-              完了後の再生 UI は次の Step D で追加します。
+              完成した放送はそのまま再生でき、読み上げ中のニュースと出典を確認できます。
             </p>
           </div>
 
@@ -36,7 +36,7 @@ export default function Home() {
         </div>
 
         <footer className="border-t border-[#ddd3c1] pt-5 text-sm leading-6 text-[#6f6a5f]">
-          VOICEVOX Engine をローカルで使用します。出典と再生 UI は Step D で画面に統合します。
+          VOICEVOX Engine をローカルで使用します。各ニュースの出典 URL は放送カードから開けます。
         </footer>
       </section>
     </main>
