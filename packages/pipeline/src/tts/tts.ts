@@ -47,6 +47,8 @@ type VoicevoxAudioQuery = Record<string, unknown>;
 const DEFAULT_BASE_URL = "http://localhost:50021";
 const DEFAULT_SPEAKER = 3;
 const DEFAULT_SPEED_SCALE = 1;
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 5000;
 
 export async function synthesizeScript(
   script: BroadcastScript,
@@ -72,56 +74,113 @@ export async function synthesizeScript(
   }
 
   for (const cueInput of cueInputs) {
-    const audioQueryResult = await requestAudioQuery(baseUrl, speaker, cueInput.text);
-
-    if (audioQueryResult.isErr()) {
-      return err(audioQueryResult.error);
-    }
-
-    const query = {
-      ...audioQueryResult.value,
+    const cueResult = await synthesizeCueWithRetry({
+      cueInput,
+      baseUrl,
+      speaker,
       speedScale,
-    };
-    const synthesisResult = await requestSynthesis(baseUrl, speaker, cueInput.text, query);
-
-    if (synthesisResult.isErr()) {
-      return err(synthesisResult.error);
-    }
-
-    let durationSec: number;
-
-    try {
-      durationSec = parseWavDurationSec(synthesisResult.value);
-    } catch (cause) {
-      return err({
-        type: "synthesis_failed",
-        text: cueInput.text,
-        status: 200,
-        message: cause instanceof Error ? cause.message : "Invalid WAV response",
-      });
-    }
-
-    try {
-      await writeFile(cueInput.filePath, synthesisResult.value);
-    } catch (cause) {
-      return err({
-        type: "write_failed",
-        filePath: cueInput.filePath,
-        message: cause instanceof Error ? cause.message : "Failed to write synthesized audio",
-        cause,
-      });
-    }
-
-    cues.push({
-      ...cueInput,
-      durationSec,
     });
+
+    if (cueResult.isErr()) {
+      return err(cueResult.error);
+    }
+
+    cues.push(cueResult.value);
     options.onCueComplete?.(cueInput.index, cueInputs.length);
   }
 
   return ok({
     cues,
     totalDurationSec: cues.reduce((sum, cue) => sum + cue.durationSec, 0),
+  });
+}
+
+async function synthesizeCueWithRetry({
+  cueInput,
+  baseUrl,
+  speaker,
+  speedScale,
+}: {
+  cueInput: CueInput;
+  baseUrl: string;
+  speaker: number;
+  speedScale: number;
+}): Promise<Result<TtsCue, TtsError>> {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    const result = await synthesizeCue({ cueInput, baseUrl, speaker, speedScale });
+
+    if (result.isOk()) {
+      return result;
+    }
+
+    if (result.error.type !== "engine_unreachable" || attempt === MAX_RETRIES) {
+      return err(result.error);
+    }
+
+    console.warn(`TTS retry ${attempt + 1}/${MAX_RETRIES} for cue ${cueInput.index}`);
+    await sleep(RETRY_DELAY_MS);
+  }
+
+  return err({
+    type: "engine_unreachable",
+    message: "Failed to reach VOICEVOX engine",
+  });
+}
+
+async function synthesizeCue({
+  cueInput,
+  baseUrl,
+  speaker,
+  speedScale,
+}: {
+  cueInput: CueInput;
+  baseUrl: string;
+  speaker: number;
+  speedScale: number;
+}): Promise<Result<TtsCue, TtsError>> {
+  const audioQueryResult = await requestAudioQuery(baseUrl, speaker, cueInput.text);
+
+  if (audioQueryResult.isErr()) {
+    return err(audioQueryResult.error);
+  }
+
+  const query = {
+    ...audioQueryResult.value,
+    speedScale,
+  };
+  const synthesisResult = await requestSynthesis(baseUrl, speaker, cueInput.text, query);
+
+  if (synthesisResult.isErr()) {
+    return err(synthesisResult.error);
+  }
+
+  let durationSec: number;
+
+  try {
+    durationSec = parseWavDurationSec(synthesisResult.value);
+  } catch (cause) {
+    return err({
+      type: "synthesis_failed",
+      text: cueInput.text,
+      status: 200,
+      message: cause instanceof Error ? cause.message : "Invalid WAV response",
+    });
+  }
+
+  try {
+    await writeFile(cueInput.filePath, synthesisResult.value);
+  } catch (cause) {
+    return err({
+      type: "write_failed",
+      filePath: cueInput.filePath,
+      message: cause instanceof Error ? cause.message : "Failed to write synthesized audio",
+      cause,
+    });
+  }
+
+  return ok({
+    ...cueInput,
+    durationSec,
   });
 }
 
@@ -247,4 +306,10 @@ async function responseMessage(response: Response): Promise<string> {
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, "");
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

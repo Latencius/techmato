@@ -22,6 +22,12 @@ const script: BroadcastScript = {
   closing: "以上です。",
 };
 
+const singleCueScript: BroadcastScript = {
+  opening: "こんにちは。",
+  segments: [],
+  closing: "",
+};
+
 let tempDirs: string[] = [];
 
 beforeEach(() => {
@@ -114,6 +120,7 @@ describe("synthesizeScript", () => {
 
   it("returns engine_unreachable when fetch throws", async () => {
     const outputDir = await makeTempDir();
+    mockImmediateTimeout();
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("ECONNREFUSED")));
 
     const result = await synthesizeScript(script, { outputDir });
@@ -123,6 +130,46 @@ describe("synthesizeScript", () => {
       throw new Error("Expected engine_unreachable");
     }
     expect(result.error.type).toBe("engine_unreachable");
+  });
+
+  it("retries a cue when VOICEVOX fetch throws once and then succeeds", async () => {
+    const outputDir = await makeTempDir();
+    mockImmediateTimeout();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fetchMock = vi
+      .fn<() => Promise<Response>>()
+      .mockRejectedValueOnce(new Error("socket closed"))
+      .mockResolvedValueOnce(jsonResponse({ accentPhrases: [] }))
+      .mockResolvedValueOnce(wavResponse(makeFakeWav()))
+      .mockResolvedValueOnce(jsonResponse({ accentPhrases: [] }))
+      .mockResolvedValueOnce(wavResponse(makeFakeWav()));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await synthesizeScript(singleCueScript, { outputDir });
+
+    expect(result.isOk()).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(warn).toHaveBeenCalledWith("TTS retry 1/2 for cue 0");
+    warn.mockRestore();
+  });
+
+  it("returns engine_unreachable after retry attempts are exhausted", async () => {
+    const outputDir = await makeTempDir();
+    mockImmediateTimeout();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const fetchMock = vi.fn().mockRejectedValue(new Error("engine down"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await synthesizeScript(singleCueScript, { outputDir });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      throw new Error("Expected engine_unreachable");
+    }
+    expect(result.error.type).toBe("engine_unreachable");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(warn).toHaveBeenCalledTimes(2);
+    warn.mockRestore();
   });
 
   it("returns audio_query_failed for non-2xx audio_query responses", async () => {
@@ -144,6 +191,7 @@ describe("synthesizeScript", () => {
         status: 500,
       }),
     );
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("returns synthesis_failed and leaves previous cue files when synthesis fails", async () => {
@@ -203,6 +251,16 @@ function mockVoicevoxSuccess(wav: Uint8Array) {
   );
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+}
+
+function mockImmediateTimeout() {
+  return vi.spyOn(globalThis, "setTimeout").mockImplementation((callback: TimerHandler) => {
+    if (typeof callback === "function") {
+      callback();
+    }
+
+    return 0 as unknown as ReturnType<typeof setTimeout>;
+  });
 }
 
 function jsonResponse(body: unknown): Response {

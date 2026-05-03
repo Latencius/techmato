@@ -4,4 +4,12 @@ services:
     container_name: techmato-voicevox
     ports:
       - "50021:50021"
+    mem_limit: 4g
+    mem_reservation: 2g
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:50021/version || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
