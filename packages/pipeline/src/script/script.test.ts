@@ -182,4 +182,64 @@ describe("generateScript", () => {
     expect(userPrompt).toContain('"content": "First extracted article body"');
     expect(userPrompt).not.toContain('"summary": "First summary"');
   });
+
+  it("accepts a long-mode script within the long length range", async () => {
+    const longValid = longScript(1900);
+    mockText(JSON.stringify(longValid));
+
+    const result = await generateScript(articles, new Date("2026-05-02T05:00:00.000Z"), "long");
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value).toEqual(longValid);
+    expect(createMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        max_tokens: 4096,
+      }),
+    );
+    expect(createMessageMock.mock.calls[0]?.[0].messages[0].content).toContain(
+      "各 segment 600字程度",
+    );
+  });
+
+  it("retries long-mode scripts with the long shortening prompt", async () => {
+    const first = longScript(2300);
+    const second = longScript(1800);
+    createMessageMock
+      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(first) }] })
+      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] });
+
+    const result = await generateScript(articles, new Date(), "long");
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value).toEqual(second);
+    expect(createMessageMock.mock.calls[1]?.[0].messages[0].content).toContain("1700〜2200字");
+  });
+
+  it("returns length_violation when long-mode retry is still too long", async () => {
+    const first = longScript(2300);
+    const second = longScript(2400);
+    createMessageMock
+      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(first) }] })
+      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] });
+
+    const result = await generateScript(articles, new Date(), "long");
+
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      throw new Error("Expected long length violation");
+    }
+    expect(result.error).toEqual(
+      expect.objectContaining({
+        type: "length_violation",
+        actual: 2400,
+        limit: 2200,
+      }),
+    );
+  });
 });

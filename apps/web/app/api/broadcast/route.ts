@@ -1,3 +1,4 @@
+import { BROADCAST_MODES, type BroadcastMode } from "@techmato/pipeline";
 import { formatOutputTimestamp } from "@techmato/pipeline/broadcast/render";
 import { type RunBroadcastOptions, runBroadcast } from "@techmato/pipeline/broadcast/runBroadcast";
 import { NextResponse } from "next/server";
@@ -10,6 +11,7 @@ type BroadcastRequestBody = {
   speaker?: unknown;
   maxStories?: unknown;
   gapMs?: unknown;
+  mode?: unknown;
 };
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -20,7 +22,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     const outputDir = createOutputStore(outputRoot).resolveDir(broadcastId);
     const options = await parseRunOptions(request, {
       speaker: 3,
-      maxStories: 4,
+      maxStories: BROADCAST_MODES.short.maxStories,
+      mode: "short",
       voicevox: process.env.VOICEVOX_BASE_URL ?? "http://localhost:50021",
       gapMs: 300,
       outputRoot,
@@ -94,7 +97,14 @@ async function parseRunOptions(
     return { ok: false, message: "request body must be valid JSON" };
   }
   const speaker = readNumber(body, "speaker", defaults.speaker);
-  const maxStories = readNumber(body, "maxStories", defaults.maxStories);
+  const mode = readMode(body);
+  if (!mode) {
+    return { ok: false, message: "mode must be short or long" };
+  }
+
+  const defaultMaxStories =
+    body.maxStories === undefined ? BROADCAST_MODES[mode].maxStories : defaults.maxStories;
+  const maxStories = readNumber(body, "maxStories", defaultMaxStories);
   const gapMs = readNumber(body, "gapMs", defaults.gapMs);
 
   if (speaker === null) {
@@ -113,6 +123,7 @@ async function parseRunOptions(
       ...defaults,
       speaker,
       maxStories,
+      mode,
       gapMs,
     },
   };
@@ -139,4 +150,12 @@ function readNumber(
   }
 
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readMode(body: BroadcastRequestBody): BroadcastMode | null {
+  if (body.mode === undefined) {
+    return "short";
+  }
+
+  return body.mode === "short" || body.mode === "long" ? body.mode : null;
 }

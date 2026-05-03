@@ -1,5 +1,6 @@
 "use client";
 
+import type { BroadcastMode } from "@techmato/pipeline";
 import { useEffect, useReducer } from "react";
 import {
   type BroadcastMetadataResponse,
@@ -19,6 +20,7 @@ import { ProgressIndicator } from "./ProgressIndicator";
 type BroadcastMetadata = NonNullable<BroadcastMetadataResponse["metadata"]>;
 
 type GeneratorState = {
+  mode: BroadcastMode;
   generation: { broadcastId: string | null; outputDir: string | null };
   starting: boolean;
   startError: string | null;
@@ -29,6 +31,7 @@ type GeneratorState = {
 };
 
 type GeneratorAction =
+  | { type: "set_mode"; mode: BroadcastMode }
   | { type: "start_requested" }
   | { type: "start_ok"; broadcastId: string; outputDir: string }
   | { type: "start_conflict"; broadcastId?: string }
@@ -41,6 +44,7 @@ type GeneratorAction =
   | { type: "reset" };
 
 const INITIAL_STATE: GeneratorState = {
+  mode: "short",
   generation: { broadcastId: null, outputDir: null },
   starting: false,
   startError: null,
@@ -125,7 +129,7 @@ export function BroadcastGenerator() {
   async function handleStart() {
     dispatch({ type: "start_requested" });
 
-    const result = await startBroadcast();
+    const result = await startBroadcast({ mode: state.mode });
 
     if (result.ok) {
       dispatch({
@@ -165,6 +169,28 @@ export function BroadcastGenerator() {
 
   return (
     <div className="mt-10">
+      <div className="mb-5 max-w-3xl">
+        <div className="inline-flex border border-[#171717] bg-[#fffaf0] p-1 shadow-[5px_5px_0_#171717]">
+          <ModeButton
+            label="1分版"
+            description="4本ヘッドライン"
+            selected={state.mode === "short"}
+            disabled={busy}
+            onClick={() => dispatch({ type: "set_mode", mode: "short" })}
+          />
+          <ModeButton
+            label="5分版"
+            description="3本詳細解説"
+            selected={state.mode === "long"}
+            disabled={busy}
+            onClick={() => dispatch({ type: "set_mode", mode: "long" })}
+          />
+        </div>
+        <p className="mt-3 text-sm leading-6 text-[#6f665b]">
+          1分版は4本のヘッドラインを素早く、5分版は3本を落ち着いて深掘りします。
+        </p>
+      </div>
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <BroadcastButton busy={busy} onClick={handleStart} />
         {state.lastCompleted && !state.player ? (
@@ -239,6 +265,8 @@ export function BroadcastGenerator() {
 
 function reducer(state: GeneratorState, action: GeneratorAction): GeneratorState {
   switch (action.type) {
+    case "set_mode":
+      return { ...state, mode: action.mode };
     case "start_requested":
       return {
         ...state,
@@ -289,9 +317,39 @@ function reducer(state: GeneratorState, action: GeneratorAction): GeneratorState
     case "reset":
       return {
         ...INITIAL_STATE,
+        mode: state.mode,
         lastCompleted: state.lastCompleted,
       };
   }
+}
+
+function ModeButton({
+  label,
+  description,
+  selected,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  description: string;
+  selected: boolean;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`min-w-28 px-4 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+        selected ? "bg-[#171717] text-[#fffaf0]" : "text-[#171717] hover:bg-[#efe6d7]"
+      }`}
+      aria-pressed={selected}
+    >
+      <span className="block text-sm font-black tracking-wide">{label}</span>
+      <span className="mt-1 block text-[11px] font-semibold">{description}</span>
+    </button>
+  );
 }
 
 function latestDone(events: ReturnType<typeof useProgressStream>["events"]) {

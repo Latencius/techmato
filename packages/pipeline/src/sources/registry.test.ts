@@ -8,7 +8,6 @@ describe("SOURCES", () => {
       "techcrunch",
       "theverge",
       "arstechnica",
-      "anthropic",
       "github",
       "publickey",
     ]);

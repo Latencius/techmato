@@ -2,11 +2,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages";
 import type { Article, BroadcastScript, ScriptSegment } from "@techmato/types";
 import { err, ok, type Result } from "neverthrow";
+import { BROADCAST_MODES, type BroadcastMode } from "../broadcast/mode.js";
 import { DEFAULT_PROMPTS_PATH, loadPromptSection } from "../prompts/load.js";
 
 const MODEL = "claude-sonnet-4-6";
-const SCRIPT_LENGTH_LIMIT = 400;
-const SCRIPT_SHORT_LENGTH_WARN = 250;
 
 export type ScriptError =
   | { type: "api_error"; message: string; cause?: unknown }
@@ -21,13 +20,16 @@ type MessageContentBlock = {
 export async function generateScript(
   articles: Article[],
   now: Date = new Date(),
+  mode: BroadcastMode = "short",
 ): Promise<Result<BroadcastScript, ScriptError>> {
   try {
-    const firstPrompt = await loadPromptSection(DEFAULT_PROMPTS_PATH, "2. 台本生成プロンプト", {
+    const config = BROADCAST_MODES[mode];
+    const maxTokens = mode === "long" ? 4096 : 2048;
+    const firstPrompt = await loadPromptSection(DEFAULT_PROMPTS_PATH, config.scriptPromptKey, {
       CURRENT_TIME: formatJstHour(now),
       STORIES_JSON: JSON.stringify(toPromptStories(articles), null, 2),
     });
-    const firstScriptResult = await requestScript(firstPrompt.system, firstPrompt.user);
+    const firstScriptResult = await requestScript(firstPrompt.system, firstPrompt.user, maxTokens);
 
     if (!firstScriptResult) {
       return err({
@@ -38,19 +40,19 @@ export async function generateScript(
 
     const firstLength = countScriptCharacters(firstScriptResult);
 
-    if (firstLength < SCRIPT_SHORT_LENGTH_WARN) {
+    if (firstLength < config.scriptMin) {
       console.warn(`Generated script is shorter than expected: ${firstLength} characters`);
     }
 
-    if (firstLength <= SCRIPT_LENGTH_LIMIT) {
+    if (firstLength <= config.scriptMax) {
       return ok(firstScriptResult);
     }
 
-    const retryPrompt = await loadPromptSection(DEFAULT_PROMPTS_PATH, "3. 短縮再生成プロンプト", {
+    const retryPrompt = await loadPromptSection(DEFAULT_PROMPTS_PATH, config.shortenPromptKey, {
       CHAR_COUNT: String(firstLength),
       SCRIPT_JSON: JSON.stringify(firstScriptResult, null, 2),
     });
-    const retryScriptResult = await requestScript(retryPrompt.system, retryPrompt.user);
+    const retryScriptResult = await requestScript(retryPrompt.system, retryPrompt.user, maxTokens);
 
     if (!retryScriptResult) {
       return err({
@@ -61,16 +63,16 @@ export async function generateScript(
 
     const retryLength = countScriptCharacters(retryScriptResult);
 
-    if (retryLength > SCRIPT_LENGTH_LIMIT) {
+    if (retryLength > config.scriptMax) {
       return err({
         type: "length_violation",
-        message: `Generated script is ${retryLength} characters, exceeding ${SCRIPT_LENGTH_LIMIT}`,
+        message: `Generated script is ${retryLength} characters, exceeding ${config.scriptMax}`,
         actual: retryLength,
-        limit: SCRIPT_LENGTH_LIMIT,
+        limit: config.scriptMax,
       });
     }
 
-    if (retryLength < SCRIPT_SHORT_LENGTH_WARN) {
+    if (retryLength < config.scriptMin) {
       console.warn(`Generated script is shorter than expected: ${retryLength} characters`);
     }
 
@@ -87,13 +89,14 @@ export async function generateScript(
 async function requestScript(
   system: string | undefined,
   user: string,
+  maxTokens: number,
 ): Promise<BroadcastScript | undefined> {
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
   const request: MessageCreateParamsNonStreaming = {
     model: MODEL,
-    max_tokens: 2048,
+    max_tokens: maxTokens,
     temperature: 0.5,
     messages: [{ role: "user", content: user }],
     output_config: {

@@ -25,6 +25,26 @@ describe("startBroadcast", () => {
     expect(fetch).toHaveBeenCalledWith("/api/broadcast", { method: "POST" });
   });
 
+  it("sends the requested broadcast mode", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(202, {
+          broadcastId: "broadcast-1",
+          outputDir: "/tmp/output/broadcast-1",
+        }),
+      ),
+    );
+
+    await startBroadcast({ mode: "long" });
+
+    expect(fetch).toHaveBeenCalledWith("/api/broadcast", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "long" }),
+    });
+  });
+
   it("returns conflict with the running broadcast id for a 409 response", async () => {
     vi.stubGlobal(
       "fetch",

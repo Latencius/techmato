@@ -23,6 +23,7 @@ export async function runBroadcast(options: CliOptions): Promise<number> {
   const result = await runPipelineBroadcast({
     speaker: options.speaker,
     maxStories: options.maxStories,
+    mode: options.mode,
     voicevox: options.voicevox,
     gapMs: options.gapMs,
     outputRoot: options.outputRoot ?? resolveDefaultOutputRoot(import.meta),

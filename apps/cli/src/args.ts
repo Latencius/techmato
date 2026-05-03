@@ -1,8 +1,10 @@
 import { resolve } from "node:path";
+import { BROADCAST_MODES, type BroadcastMode } from "@techmato/pipeline";
 
 export type CliOptions = {
   speaker: number;
   maxStories: number;
+  mode: BroadcastMode;
   voicevox: string;
   gapMs: number;
   outputRoot: string | null;
@@ -14,7 +16,8 @@ export const USAGE = `Usage: pnpm cli [options]
 
 Options:
   --speaker <number>      VOICEVOX speaker id (default: 3)
-  --max-stories <number>  Number of stories to select (default: 4)
+  --mode <short|long>     Broadcast length mode (default: short)
+  --max-stories <number>  Number of stories to select (default: 4 short, 3 long)
   --voicevox <url>        VOICEVOX base URL (default: VOICEVOX_BASE_URL or http://localhost:50021)
   --gap-ms <number>       Silence gap between cues in milliseconds (default: 300)
   --output-root <dir>     Output root directory (default: ./output)
@@ -23,11 +26,13 @@ Options:
 export function parseArgs(argv: string[]): ParseArgsResult {
   const options: CliOptions = {
     speaker: 3,
-    maxStories: 4,
+    maxStories: BROADCAST_MODES.short.maxStories,
+    mode: "short",
     voicevox: process.env.VOICEVOX_BASE_URL ?? "http://localhost:50021",
     gapMs: 300,
     outputRoot: null,
   };
+  let maxStoriesSpecified = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const flag = argv[index];
@@ -52,6 +57,19 @@ export function parseArgs(argv: string[]): ParseArgsResult {
           return parsed;
         }
         options.maxStories = parsed.value;
+        maxStoriesSpecified = true;
+        index += 1;
+        break;
+      }
+      case "--mode": {
+        const parsed = parseModeFlag(argv[index + 1]);
+        if (!parsed.ok) {
+          return parsed;
+        }
+        options.mode = parsed.value;
+        if (!maxStoriesSpecified) {
+          options.maxStories = BROADCAST_MODES[parsed.value].maxStories;
+        }
         index += 1;
         break;
       }
@@ -88,6 +106,20 @@ export function parseArgs(argv: string[]): ParseArgsResult {
   }
 
   return { ok: true, value: options };
+}
+
+function parseModeFlag(
+  value: string | undefined,
+): { ok: true; value: BroadcastMode } | { ok: false; message: string } {
+  if (!value) {
+    return { ok: false, message: "--mode requires a value" };
+  }
+
+  if (value !== "short" && value !== "long") {
+    return { ok: false, message: "--mode must be short or long" };
+  }
+
+  return { ok: true, value };
 }
 
 function parseNumberFlag(

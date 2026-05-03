@@ -9,6 +9,7 @@ describe("parseArgs", () => {
       value: {
         speaker: 3,
         maxStories: 4,
+        mode: "short",
         voicevox: "http://localhost:50021",
         gapMs: 300,
         outputRoot: null,
@@ -35,6 +36,7 @@ describe("parseArgs", () => {
       value: {
         speaker: 8,
         maxStories: 3,
+        mode: "short",
         voicevox: "http://127.0.0.1:50021/",
         gapMs: 500,
         outputRoot: resolve("tmp/output"),
@@ -83,5 +85,36 @@ describe("parseArgs", () => {
       ok: false,
       message: "--speaker must be a number",
     });
+  });
+
+  it("uses long mode defaults when --mode long is provided", () => {
+    expect(parseArgs(["--mode", "long"])).toEqual({
+      ok: true,
+      value: {
+        speaker: 3,
+        maxStories: 3,
+        mode: "long",
+        voicevox: "http://localhost:50021",
+        gapMs: 300,
+        outputRoot: null,
+      },
+    });
+  });
+
+  it("rejects unsupported modes", () => {
+    expect(parseArgs(["--mode", "foo"])).toEqual({
+      ok: false,
+      message: "--mode must be short or long",
+    });
+  });
+
+  it("lets --max-stories override the long mode default", () => {
+    const result = parseArgs(["--mode", "long", "--max-stories", "5"]);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.mode).toBe("long");
+      expect(result.value.maxStories).toBe(5);
+    }
   });
 });

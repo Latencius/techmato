@@ -8,7 +8,9 @@ export default function Home() {
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#6f6a5f]">
             techmato
           </p>
-          <p className="hidden text-sm text-[#6f6a5f] sm:block">one-minute tech broadcast</p>
+          <p className="hidden text-sm text-[#6f6a5f] sm:block">
+            short or deep-dive tech broadcast
+          </p>
         </header>
 
         <div className="grid gap-10 py-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)] lg:items-center">

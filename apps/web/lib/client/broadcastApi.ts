@@ -1,3 +1,4 @@
+import type { BroadcastMode } from "@techmato/pipeline";
 import type { SegmentsJson, StoriesJson } from "@techmato/pipeline/broadcast/render";
 
 export type StartBroadcastResult =
@@ -24,9 +25,15 @@ export type FetchBroadcastResult =
   | { ok: false; reason: "not_found" }
   | { ok: false; reason: "error"; message: string };
 
-export async function startBroadcast(): Promise<StartBroadcastResult> {
+export type StartBroadcastOptions = {
+  mode?: BroadcastMode;
+};
+
+export async function startBroadcast(
+  options: StartBroadcastOptions = {},
+): Promise<StartBroadcastResult> {
   try {
-    const response = await fetch("/api/broadcast", { method: "POST" });
+    const response = await fetch("/api/broadcast", buildStartRequest(options));
     const body = (await response.json().catch(() => ({}))) as {
       broadcastId?: unknown;
       outputDir?: unknown;
@@ -61,6 +68,18 @@ export async function startBroadcast(): Promise<StartBroadcastResult> {
       message: cause instanceof Error ? cause.message : "Failed to start broadcast",
     };
   }
+}
+
+function buildStartRequest(options: StartBroadcastOptions): RequestInit {
+  if (!options.mode) {
+    return { method: "POST" };
+  }
+
+  return {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ mode: options.mode }),
+  };
 }
 
 export async function fetchBroadcast(broadcastId: string): Promise<FetchBroadcastResult> {

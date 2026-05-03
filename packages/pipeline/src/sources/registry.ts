@@ -49,7 +49,7 @@ export const SOURCES: NewsSource[] = [
     rssUrl: "https://www.anthropic.com/news/rss.xml",
     language: "en",
     priority: "high",
-    enabled: true,
+    enabled: false,
   },
   {
     id: "openai",

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages";
 import type { Article } from "@techmato/types";
 import { err, ok, type Result } from "neverthrow";
+import { BROADCAST_MODES, type BroadcastMode } from "../broadcast/mode.js";
 import { DEFAULT_PROMPTS_PATH, loadPromptSection } from "../prompts/load.js";
 
 const MODEL = "claude-sonnet-4-6";
@@ -34,12 +35,17 @@ type MessageContentBlock = {
 export async function selectArticles(
   articles: Article[],
   count = 4,
+  mode: BroadcastMode = "short",
 ): Promise<Result<Selection[], SelectError>> {
   try {
-    const prompt = await loadPromptSection(DEFAULT_PROMPTS_PATH, "1. 記事選定プロンプト", {
-      N: String(count),
-      ARTICLES_JSON: JSON.stringify(toPromptArticles(articles), null, 2),
-    });
+    const prompt = await loadPromptSection(
+      DEFAULT_PROMPTS_PATH,
+      BROADCAST_MODES[mode].selectPromptKey,
+      {
+        N: String(count),
+        ARTICLES_JSON: JSON.stringify(toPromptArticles(articles), null, 2),
+      },
+    );
     const anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY,
     });

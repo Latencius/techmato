@@ -166,6 +166,24 @@ describe("runBroadcast", () => {
     expect(events.at(-1)).toMatchObject({ type: "done", broadcastId: "custom-id" });
   });
 
+  it("passes long mode through to selection and script generation", async () => {
+    const outputRoot = await makeTempDir();
+    mockSuccessfulPipeline();
+
+    const result = await runBroadcast({
+      speaker: 3,
+      maxStories: 3,
+      mode: "long",
+      voicevox: "http://localhost:50021",
+      gapMs: 300,
+      outputRoot,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(selectArticlesMock).toHaveBeenCalledWith(expect.any(Array), 3, "long");
+    expect(generateScriptMock).toHaveBeenCalledWith(expect.any(Array), expect.any(Date), "long");
+  });
+
   it("emits error and stops when select fails", async () => {
     const outputRoot = await makeTempDir();
     const events: ProgressEvent[] = [];

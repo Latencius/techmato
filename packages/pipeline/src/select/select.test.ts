@@ -173,4 +173,24 @@ describe("selectArticles", () => {
     }
     expect(result.value).toEqual([{ article: articles[2], reason: "注目" }]);
   });
+
+  it("uses the long-form selection prompt when mode is long", async () => {
+    createMessageMock.mockResolvedValueOnce({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            selected: [{ index: 1, reason: "深掘り向き" }],
+          }),
+        },
+      ],
+    });
+
+    const result = await selectArticles(articles, 3, "long");
+
+    expect(result.isOk()).toBe(true);
+    const request = createMessageMock.mock.calls[0]?.[0];
+    expect(request.messages[0].content).toContain("深掘りに耐える記事");
+    expect(request.messages[0].content).toContain("3件");
+  });
 });

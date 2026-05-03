@@ -6,6 +6,7 @@ import type { MergeError } from "../merge/merge.js";
 import type { ScriptError } from "../script/script.js";
 import type { SelectError, Selection } from "../select/select.js";
 import type { TtsError } from "../tts/tts.js";
+import type { BroadcastMode } from "./mode.js";
 import type { ProgressEvent, ProgressEventStep } from "./progressEvents.js";
 import {
   buildSegmentMetadata,
@@ -22,6 +23,7 @@ export type RunBroadcastOptions = {
   voicevox: string;
   gapMs: number;
   outputRoot: string;
+  mode?: BroadcastMode;
   broadcastId?: string;
   generatedAt?: Date;
   onProgress?: (event: ProgressEvent) => void;
@@ -60,6 +62,7 @@ export async function runBroadcast(
   const { fetchAllSources } = await import("../sources/fetch.js");
   const { synthesizeScript } = await import("../tts/tts.js");
   const generatedAt = options.generatedAt ?? new Date();
+  const mode = options.mode ?? "short";
   const broadcastId = options.broadcastId ?? formatOutputTimestamp(generatedAt);
   const outputDir = join(options.outputRoot, broadcastId);
 
@@ -107,7 +110,7 @@ export async function runBroadcast(
   complete("fetch");
   start("select");
 
-  const selectionResult = await selectArticles(fetchResult.articles, options.maxStories);
+  const selectionResult = await selectArticles(fetchResult.articles, options.maxStories, mode);
   if (selectionResult.isErr()) {
     return failResult(options, "select", selectionResult.error);
   }
@@ -121,7 +124,7 @@ export async function runBroadcast(
   complete("extract");
   start("script");
 
-  const scriptResult = await generateScript(enrichedArticles, generatedAt);
+  const scriptResult = await generateScript(enrichedArticles, generatedAt, mode);
   if (scriptResult.isErr()) {
     return failResult(options, "script", scriptResult.error);
   }
