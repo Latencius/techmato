@@ -1,16 +1,43 @@
+import { BroadcastGenerator } from "../components/BroadcastGenerator";
+
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#f6f4ef] px-6 py-10 text-[#171717]">
-      <section className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-5xl flex-col justify-center">
-        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.24em] text-[#6f6a5f]">
-          techmato
-        </p>
-        <h1 className="max-w-3xl text-5xl font-semibold leading-tight md:text-7xl">
-          Phase 2 構築中
-        </h1>
-        <p className="mt-6 max-w-2xl text-lg leading-8 text-[#4f4a42]">
-          ブラウザから今日のAI・テックニュースを生成して再生する体験を準備しています。
-        </p>
+    <main className="min-h-screen bg-[#f6f4ef] px-6 py-8 text-[#171717]">
+      <section className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col justify-between">
+        <header className="flex items-center justify-between gap-4 border-b border-[#ddd3c1] pb-5">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#6f6a5f]">
+            techmato
+          </p>
+          <p className="hidden text-sm text-[#6f6a5f] sm:block">one-minute tech broadcast</p>
+        </header>
+
+        <div className="grid gap-10 py-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)] lg:items-center">
+          <div>
+            <p className="mb-5 inline-flex border border-[#d8cfbd] bg-[#fffaf0] px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#756b5e]">
+              Phase 2 / Step C
+            </p>
+            <h1 className="max-w-3xl text-5xl font-semibold leading-tight md:text-7xl">
+              今日のテックニュースを、声で受け取る。
+            </h1>
+            <p className="mt-6 max-w-2xl text-lg leading-8 text-[#4f4a42]">
+              ボタンを押すとニュース取得から台本生成、音声合成までをサーバーで実行します。
+              完了後の再生 UI は次の Step D で追加します。
+            </p>
+          </div>
+
+          <div className="border border-[#d8cfbd] bg-[#fffaf0]/70 p-5 shadow-[10px_10px_0_#ded4c1] sm:p-7">
+            <p className="text-sm font-semibold text-[#6f6a5f]">Generate</p>
+            <h2 className="mt-2 text-3xl font-semibold">放送を生成</h2>
+            <p className="mt-3 text-sm leading-6 text-[#5a5147]">
+              進捗はリアルタイムで更新されます。音声合成中は cue の完了数も表示します。
+            </p>
+            <BroadcastGenerator />
+          </div>
+        </div>
+
+        <footer className="border-t border-[#ddd3c1] pt-5 text-sm leading-6 text-[#6f6a5f]">
+          VOICEVOX Engine をローカルで使用します。出典と再生 UI は Step D で画面に統合します。
+        </footer>
       </section>
     </main>
   );
