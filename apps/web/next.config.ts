@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["@mozilla/readability", "jsdom"],
+  serverExternalPackages: ["jsdom"],
   transpilePackages: ["@techmato/pipeline", "@techmato/types"],
   webpack(config) {
     config.resolve.extensionAlias = {
