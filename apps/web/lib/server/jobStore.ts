@@ -107,4 +107,12 @@ export function createJobStore(): JobStore {
   };
 }
 
-export const jobStore = createJobStore();
+declare global {
+  var __techmatoJobStore: JobStore | undefined;
+}
+
+if (!globalThis.__techmatoJobStore) {
+  globalThis.__techmatoJobStore = createJobStore();
+}
+
+export const jobStore: JobStore = globalThis.__techmatoJobStore;
