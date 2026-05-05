@@ -106,7 +106,7 @@ describe("generateScript", () => {
   });
 
   it("retries once with the shortening prompt when the first script is too long", async () => {
-    const initial = longScript(420);
+    const initial = longScript(460);
     createMessageMock
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(initial) }] })
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(validScript) }] });
@@ -119,12 +119,12 @@ describe("generateScript", () => {
     }
     expect(result.value).toEqual(validScript);
     expect(createMessageMock).toHaveBeenCalledTimes(2);
-    expect(createMessageMock.mock.calls[1]?.[0].messages[0].content).toContain("目標の400文字");
+    expect(createMessageMock.mock.calls[1]?.[0].messages[0].content).toContain("目標の450文字");
   });
 
   it("returns a length_violation error when retry is still too long", async () => {
-    const first = longScript(430);
-    const second = longScript(410);
+    const first = longScript(460);
+    const second = longScript(470);
     createMessageMock
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(first) }] })
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] });
@@ -138,10 +138,40 @@ describe("generateScript", () => {
     expect(result.error).toEqual(
       expect.objectContaining({
         type: "length_violation",
-        actual: 410,
-        limit: 400,
+        actual: 470,
+        limit: 450,
       }),
     );
+  });
+
+  it("accepts short-mode scripts between 401 and 450 characters", async () => {
+    const script = longScript(410);
+    mockText(JSON.stringify(script));
+
+    const result = await generateScript(articles);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value).toEqual(script);
+    expect(createMessageMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("accepts a short-mode retry below the relaxed upper bound", async () => {
+    const first = longScript(460);
+    const second = longScript(440);
+    createMessageMock
+      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(first) }] })
+      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] });
+
+    const result = await generateScript(articles);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value).toEqual(second);
   });
 
   it("returns invalid_response for malformed JSON", async () => {

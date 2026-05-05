@@ -51,7 +51,7 @@
 5. composeScript(stories)
    ├─ Claude API: 全記事を渡して台本生成
    ├─ 出力: { opening, segments: [{title, url, narration}], closing }
-   └─ 全体で日本語300〜400文字に収める
+   └─ 全体で日本語300〜450文字に収める
 
 6. synthesizeAudio(script)
    ├─ 各セグメントをVOICEVOXに投げる

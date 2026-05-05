@@ -7,7 +7,7 @@ describe("BROADCAST_MODES", () => {
       mode: "short",
       maxStories: 4,
       scriptMin: 250,
-      scriptMax: 400,
+      scriptMax: 450,
       selectPromptKey: "1. 記事選定プロンプト",
       scriptPromptKey: "2. 台本生成プロンプト",
       shortenPromptKey: "3. 短縮再生成プロンプト",
