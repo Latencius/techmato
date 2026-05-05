@@ -2,6 +2,7 @@ import { BROADCAST_MODES, type BroadcastMode } from "@techmato/pipeline";
 import { formatOutputTimestamp } from "@techmato/pipeline/broadcast/render";
 import { type RunBroadcastOptions, runBroadcast } from "@techmato/pipeline/broadcast/runBroadcast";
 import { NextResponse } from "next/server";
+import { historyStore } from "../../../lib/server/historyStoreSingleton";
 import { jobStore } from "../../../lib/server/jobStore";
 import { createOutputStore, resolveWebOutputRoot } from "../../../lib/server/outputStore";
 
@@ -29,6 +30,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       outputRoot,
       broadcastId,
       generatedAt,
+      historyStore,
     });
 
     if (!options.ok) {

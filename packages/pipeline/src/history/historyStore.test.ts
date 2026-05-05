@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -189,6 +189,72 @@ describe("createHistoryStore", () => {
       throw new Error(result.error.message);
     }
     expect(result.value).toMatchObject({ id: "story", favorite: true, title: "Story" });
+  });
+
+  it("removes an entry and its output directory when deleteFiles is true", async () => {
+    const outputRoot = await makeTempDir();
+    const store = createHistoryStore(outputRoot);
+    await seedHistory(outputRoot, {
+      version: HISTORY_FILE_VERSION,
+      items: [entry("story", "2026-05-01T00:00:00+09:00", false)],
+    });
+    await mkdir(join(outputRoot, "story"));
+    await writeFile(join(outputRoot, "story", "broadcast.wav"), "audio", "utf8");
+
+    const result = await store.removeEntry("story", { deleteFiles: true });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value).toEqual({ removed: true, filesRemoved: true });
+    await expect(
+      readFile(join(outputRoot, "story", "broadcast.wav"), "utf8"),
+    ).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    const read = await store.read();
+    expect(read.isOk()).toBe(true);
+    if (read.isErr()) {
+      throw new Error(read.error.message);
+    }
+    expect(read.value.items).toEqual([]);
+  });
+
+  it("removes an index entry successfully when output files are already missing", async () => {
+    const outputRoot = await makeTempDir();
+    const store = createHistoryStore(outputRoot);
+    await seedHistory(outputRoot, {
+      version: HISTORY_FILE_VERSION,
+      items: [entry("missing-files", "2026-05-01T00:00:00+09:00", false)],
+    });
+
+    const result = await store.removeEntry("missing-files", { deleteFiles: true });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value).toEqual({ removed: true, filesRemoved: false });
+    const read = await store.read();
+    expect(read.isOk()).toBe(true);
+    if (read.isErr()) {
+      throw new Error(read.error.message);
+    }
+    expect(read.value.items).toEqual([]);
+  });
+
+  it("returns removed false for an unknown entry", async () => {
+    const outputRoot = await makeTempDir();
+    const store = createHistoryStore(outputRoot);
+
+    const result = await store.removeEntry("unknown", { deleteFiles: true });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value).toEqual({ removed: false });
   });
 
   it("returns invalid_format for malformed JSON", async () => {

@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { err, ok, type Result } from "neverthrow";
 import type { BroadcastMode } from "../broadcast/mode.js";
@@ -41,12 +41,24 @@ export type CleanupResult = {
   skippedIds: string[];
 };
 
+export type RemoveEntryOptions = {
+  deleteFiles?: boolean;
+};
+
+export type RemoveEntryResult = {
+  removed: boolean;
+  filesRemoved?: boolean;
+};
+
 export type HistoryStore = {
   indexPath: string;
   exists(): Promise<boolean>;
   read(): Promise<Result<HistoryFile, HistoryStoreError>>;
   addEntry(input: AddEntryInput): Promise<Result<HistoryEntry, HistoryStoreError>>;
-  removeEntry(id: string): Promise<Result<{ removed: boolean }, HistoryStoreError>>;
+  removeEntry(
+    id: string,
+    options?: RemoveEntryOptions,
+  ): Promise<Result<RemoveEntryResult, HistoryStoreError>>;
   setFavorite(id: string, favorite: boolean): Promise<Result<HistoryEntry, HistoryStoreError>>;
   cleanup(maxItems: number): Promise<Result<CleanupResult, HistoryStoreError>>;
 };
@@ -131,7 +143,7 @@ export function createHistoryStore(outputRoot: string): HistoryStore {
         return ok(entry);
       });
     },
-    removeEntry(id) {
+    removeEntry(id, options = {}) {
       return lock(async () => {
         const readResult = await readUnlocked();
         if (readResult.isErr()) {
@@ -144,12 +156,17 @@ export function createHistoryStore(outputRoot: string): HistoryStore {
           return ok({ removed: false });
         }
 
+        let filesRemoved: boolean | undefined;
+        if (options.deleteFiles) {
+          filesRemoved = await removeOutputDirectory(join(outputRoot, id), id);
+        }
+
         const writeResult = await writeUnlocked({ version: HISTORY_FILE_VERSION, items });
         if (writeResult.isErr()) {
           return err(writeResult.error);
         }
 
-        return ok({ removed: true });
+        return ok({ removed: true, ...(filesRemoved !== undefined ? { filesRemoved } : {}) });
       });
     },
     setFavorite(id, favorite) {
@@ -244,6 +261,34 @@ async function writeAtomic(filePath: string, data: HistoryFile): Promise<void> {
   const tempPath = `${filePath}.tmp`;
   await writeFile(tempPath, `${JSON.stringify(data, null, 2)}\n`, "utf8");
   await rename(tempPath, filePath);
+}
+
+async function removeOutputDirectory(dir: string, id: string): Promise<boolean> {
+  try {
+    await stat(dir);
+  } catch (cause) {
+    if (isNotFound(cause)) {
+      return false;
+    }
+    console.warn(
+      `History delete skipped files for ${id}: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+    );
+    return false;
+  }
+
+  try {
+    await rm(dir, { recursive: true, force: true });
+    return true;
+  } catch (cause) {
+    console.warn(
+      `History delete skipped files for ${id}: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }`,
+    );
+    return false;
+  }
 }
 
 function isNotFound(cause: unknown): boolean {

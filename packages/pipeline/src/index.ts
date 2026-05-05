@@ -37,6 +37,8 @@ export {
   type HistoryFile,
   type HistoryStore,
   type HistoryStoreError,
+  type RemoveEntryOptions,
+  type RemoveEntryResult,
 } from "./history/historyStore.js";
 export { buildTitle } from "./history/title.js";
 export type {

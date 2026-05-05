@@ -4,7 +4,11 @@ import { join } from "node:path";
 import type { Article, BroadcastScript } from "@techmato/types";
 import { err, ok } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { HISTORY_FILE_VERSION, type HistoryFile } from "../history/historyStore.js";
+import {
+  createHistoryStore,
+  HISTORY_FILE_VERSION,
+  type HistoryFile,
+} from "../history/historyStore.js";
 import type { ProgressEvent } from "./progressEvents.js";
 import { runBroadcast } from "./runBroadcast.js";
 
@@ -197,6 +201,32 @@ describe("runBroadcast", () => {
         },
       ],
     });
+  });
+
+  it("uses an injected history store when provided", async () => {
+    const outputRoot = await makeTempDir();
+    const injectedOutputRoot = await makeTempDir();
+    const injectedHistoryStore = createHistoryStore(injectedOutputRoot);
+    mockSuccessfulPipeline();
+
+    const result = await runBroadcast({
+      speaker: 3,
+      maxStories: 4,
+      voicevox: "http://localhost:50021",
+      gapMs: 300,
+      outputRoot,
+      broadcastId: "injected-history",
+      generatedAt: new Date("2026-05-03T03:00:00.000Z"),
+      historyStore: injectedHistoryStore,
+    });
+
+    expect(result.isOk()).toBe(true);
+    await expect(readFile(join(outputRoot, "index.json"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(readFile(join(injectedOutputRoot, "index.json"), "utf8")).resolves.toContain(
+      "injected-history",
+    );
   });
 
   it("cleans up the oldest non-favorite history entry after adding a new broadcast", async () => {

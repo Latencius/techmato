@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Article } from "@techmato/types";
 import { err, ok, type Result } from "neverthrow";
+import type { HistoryStore } from "../history/historyStore.js";
 import type { MergeError } from "../merge/merge.js";
 import type { ScriptError } from "../script/script.js";
 import type { SelectError, Selection } from "../select/select.js";
@@ -27,6 +28,7 @@ export type RunBroadcastOptions = {
   broadcastId?: string;
   generatedAt?: Date;
   historyMaxItems?: number;
+  historyStore?: HistoryStore;
   onProgress?: (event: ProgressEvent) => void;
 };
 
@@ -232,7 +234,7 @@ async function updateHistory({
 }): Promise<void> {
   const { backfillFromOutputDir } = await import("../history/backfill.js");
   const { createHistoryStore } = await import("../history/historyStore.js");
-  const historyStore = createHistoryStore(outputRoot);
+  const historyStore = options.historyStore ?? createHistoryStore(outputRoot);
 
   if (!(await historyStore.exists())) {
     const backfillResult = await backfillFromOutputDir(outputRoot, historyStore);
