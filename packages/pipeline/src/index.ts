@@ -27,6 +27,18 @@ export type {
 } from "./broadcast/runBroadcast.js";
 export { runBroadcast } from "./broadcast/runBroadcast.js";
 export { extractArticleContent, extractFullContent } from "./extract/extract.js";
+export { type BackfillResult, backfillFromOutputDir } from "./history/backfill.js";
+export {
+  type AddEntryInput,
+  type CleanupResult,
+  createHistoryStore,
+  HISTORY_FILE_VERSION,
+  type HistoryEntry,
+  type HistoryFile,
+  type HistoryStore,
+  type HistoryStoreError,
+} from "./history/historyStore.js";
+export { buildTitle } from "./history/title.js";
 export type {
   FfmpegRunner,
   MergeError,

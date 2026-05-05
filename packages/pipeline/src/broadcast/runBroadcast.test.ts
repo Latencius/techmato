@@ -1,9 +1,10 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Article, BroadcastScript } from "@techmato/types";
 import { err, ok } from "neverthrow";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HISTORY_FILE_VERSION, type HistoryFile } from "../history/historyStore.js";
 import type { ProgressEvent } from "./progressEvents.js";
 import { runBroadcast } from "./runBroadcast.js";
 
@@ -164,6 +165,107 @@ describe("runBroadcast", () => {
       "generated: 2026-05-03T12:00:00+09:00",
     );
     expect(events.at(-1)).toMatchObject({ type: "done", broadcastId: "custom-id" });
+  });
+
+  it("writes a history index entry after artifacts are written", async () => {
+    const outputRoot = await makeTempDir();
+    mockSuccessfulPipeline();
+
+    const result = await runBroadcast({
+      speaker: 3,
+      maxStories: 4,
+      voicevox: "http://localhost:50021",
+      gapMs: 300,
+      outputRoot,
+      broadcastId: "history-id",
+      generatedAt: new Date("2026-05-03T03:00:00.000Z"),
+    });
+
+    expect(result.isOk()).toBe(true);
+    const history = JSON.parse(await readFile(join(outputRoot, "index.json"), "utf8"));
+    expect(history).toEqual({
+      version: HISTORY_FILE_VERSION,
+      items: [
+        {
+          id: "history-id",
+          mode: "short",
+          generatedAt: "2026-05-03T12:00:00+09:00",
+          title: "Story",
+          durationSec: 6.9,
+          favorite: false,
+          storyCount: 1,
+        },
+      ],
+    });
+  });
+
+  it("cleans up the oldest non-favorite history entry after adding a new broadcast", async () => {
+    const outputRoot = await makeTempDir();
+    mockSuccessfulPipeline();
+    await seedHistoryWithDirs(
+      outputRoot,
+      Array.from({ length: 30 }, (_, index) =>
+        historyEntry(
+          `old-${index}`,
+          `2026-05-${String(index + 1).padStart(2, "0")}T00:00:00+09:00`,
+          false,
+        ),
+      ),
+    );
+
+    const result = await runBroadcast({
+      speaker: 3,
+      maxStories: 4,
+      voicevox: "http://localhost:50021",
+      gapMs: 300,
+      outputRoot,
+      broadcastId: "new-history",
+      generatedAt: new Date("2026-06-01T00:00:00.000Z"),
+    });
+
+    expect(result.isOk()).toBe(true);
+    const history = JSON.parse(
+      await readFile(join(outputRoot, "index.json"), "utf8"),
+    ) as HistoryFile;
+    expect(history.items).toHaveLength(30);
+    expect(history.items.some((item) => item.id === "old-0")).toBe(false);
+    expect(history.items.some((item) => item.id === "new-history")).toBe(true);
+    await expect(readFile(join(outputRoot, "old-0", "marker.txt"), "utf8")).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  });
+
+  it("does not delete favorite history entries during cleanup", async () => {
+    const outputRoot = await makeTempDir();
+    mockSuccessfulPipeline();
+    await seedHistoryWithDirs(outputRoot, [
+      historyEntry("favorite", "2026-05-01T00:00:00+09:00", true),
+      ...Array.from({ length: 29 }, (_, index) =>
+        historyEntry(
+          `old-${index}`,
+          `2026-05-${String(index + 2).padStart(2, "0")}T00:00:00+09:00`,
+          false,
+        ),
+      ),
+    ]);
+
+    const result = await runBroadcast({
+      speaker: 3,
+      maxStories: 4,
+      voicevox: "http://localhost:50021",
+      gapMs: 300,
+      outputRoot,
+      broadcastId: "new-history",
+      generatedAt: new Date("2026-06-01T00:00:00.000Z"),
+    });
+
+    expect(result.isOk()).toBe(true);
+    const history = JSON.parse(
+      await readFile(join(outputRoot, "index.json"), "utf8"),
+    ) as HistoryFile;
+    expect(history.items).toHaveLength(30);
+    expect(history.items.some((item) => item.id === "favorite")).toBe(true);
+    expect(history.items.some((item) => item.id === "old-0")).toBe(false);
   });
 
   it("passes long mode through to selection and script generation", async () => {
@@ -365,4 +467,29 @@ function mockSuccessfulPipeline(): void {
       ],
     }),
   );
+}
+
+function historyEntry(id: string, generatedAt: string, favorite: boolean) {
+  return {
+    id,
+    mode: "short" as const,
+    generatedAt,
+    title: id,
+    durationSec: 1,
+    favorite,
+    storyCount: 1,
+  };
+}
+
+async function seedHistoryWithDirs(outputRoot: string, items: HistoryFile["items"]): Promise<void> {
+  await writeFile(
+    join(outputRoot, "index.json"),
+    `${JSON.stringify({ version: HISTORY_FILE_VERSION, items }, null, 2)}\n`,
+    "utf8",
+  );
+
+  for (const item of items) {
+    await mkdir(join(outputRoot, item.id), { recursive: true });
+    await writeFile(join(outputRoot, item.id, "marker.txt"), item.id, "utf8");
+  }
 }

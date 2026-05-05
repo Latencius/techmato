@@ -26,6 +26,7 @@ export type RunBroadcastOptions = {
   mode?: BroadcastMode;
   broadcastId?: string;
   generatedAt?: Date;
+  historyMaxItems?: number;
   onProgress?: (event: ProgressEvent) => void;
 };
 
@@ -184,6 +185,15 @@ export async function runBroadcast(
   }
 
   complete("write");
+  await updateHistory({
+    options,
+    outputRoot: options.outputRoot,
+    broadcastId,
+    generatedAt,
+    durationSec: mergeResult.value.totalDurationSec,
+    selected,
+    mode,
+  });
 
   const success = {
     broadcastId,
@@ -196,6 +206,73 @@ export async function runBroadcast(
   });
 
   return ok(success);
+}
+
+async function updateHistory({
+  options,
+  outputRoot,
+  broadcastId,
+  generatedAt,
+  durationSec,
+  selected,
+  mode,
+}: {
+  options: RunBroadcastOptions;
+  outputRoot: string;
+  broadcastId: string;
+  generatedAt: Date;
+  durationSec: number;
+  selected: Selection[];
+  mode: BroadcastMode;
+}): Promise<void> {
+  const { backfillFromOutputDir } = await import("../history/backfill.js");
+  const { createHistoryStore } = await import("../history/historyStore.js");
+  const historyStore = createHistoryStore(outputRoot);
+
+  if (!(await historyStore.exists())) {
+    const backfillResult = await backfillFromOutputDir(outputRoot, historyStore);
+    if (backfillResult.isErr()) {
+      console.warn(`History backfill failed: ${backfillResult.error.message}`);
+    }
+  }
+
+  const addResult = await historyStore.addEntry({
+    id: broadcastId,
+    mode,
+    generatedAt,
+    durationSec,
+    stories: selected.map((selection) => ({
+      title: selection.article.title,
+      url: selection.article.url,
+    })),
+  });
+
+  if (addResult.isErr()) {
+    options.onProgress?.({
+      type: "warn",
+      stage: "write",
+      message: `History update failed: ${addResult.error.message}`,
+    });
+    return;
+  }
+
+  const cleanupResult = await historyStore.cleanup(options.historyMaxItems ?? 30);
+  if (cleanupResult.isErr()) {
+    options.onProgress?.({
+      type: "warn",
+      stage: "write",
+      message: `History cleanup failed: ${cleanupResult.error.message}`,
+    });
+    return;
+  }
+
+  if (cleanupResult.value.skippedIds.length > 0) {
+    options.onProgress?.({
+      type: "warn",
+      stage: "write",
+      message: `History cleanup skipped: ${cleanupResult.value.skippedIds.join(", ")}`,
+    });
+  }
 }
 
 async function writeArtifacts({

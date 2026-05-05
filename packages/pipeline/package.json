@@ -8,7 +8,10 @@
     "./broadcast/outputRoot": "./src/broadcast/outputRoot.ts",
     "./broadcast/progressEvents": "./src/broadcast/progressEvents.ts",
     "./broadcast/render": "./src/broadcast/render.ts",
-    "./broadcast/runBroadcast": "./src/broadcast/runBroadcast.ts"
+    "./broadcast/runBroadcast": "./src/broadcast/runBroadcast.ts",
+    "./history/backfill": "./src/history/backfill.ts",
+    "./history/historyStore": "./src/history/historyStore.ts",
+    "./history/title": "./src/history/title.ts"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
