@@ -283,7 +283,12 @@ describe("runBroadcast", () => {
 
     expect(result.isOk()).toBe(true);
     expect(selectArticlesMock).toHaveBeenCalledWith(expect.any(Array), 3, "long");
-    expect(generateScriptMock).toHaveBeenCalledWith(expect.any(Array), expect.any(Date), "long");
+    expect(generateScriptMock).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.any(Date),
+      "long",
+      {},
+    );
   });
 
   it("emits error and stops when select fails", async () => {

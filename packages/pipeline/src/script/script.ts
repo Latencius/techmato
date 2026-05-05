@@ -3,9 +3,11 @@ import type { MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resource
 import type { Article, BroadcastScript, ScriptSegment } from "@techmato/types";
 import { err, ok, type Result } from "neverthrow";
 import { BROADCAST_MODES, type BroadcastMode } from "../broadcast/mode.js";
+import type { ProgressEvent } from "../broadcast/progressEvents.js";
 import { DEFAULT_PROMPTS_PATH, loadPromptSection } from "../prompts/load.js";
 
 const MODEL = "claude-sonnet-4-6";
+const MAX_SHORTEN_RETRIES = 2;
 
 export type ScriptError =
   | { type: "api_error"; message: string; cause?: unknown }
@@ -17,10 +19,15 @@ type MessageContentBlock = {
   text?: string;
 };
 
+export type GenerateScriptOptions = {
+  onProgress?: (event: ProgressEvent) => void;
+};
+
 export async function generateScript(
   articles: Article[],
   now: Date = new Date(),
   mode: BroadcastMode = "short",
+  options: GenerateScriptOptions = {},
 ): Promise<Result<BroadcastScript, ScriptError>> {
   try {
     const config = BROADCAST_MODES[mode];
@@ -48,35 +55,51 @@ export async function generateScript(
       return ok(firstScriptResult);
     }
 
-    const retryPrompt = await loadPromptSection(DEFAULT_PROMPTS_PATH, config.shortenPromptKey, {
-      CHAR_COUNT: String(firstLength),
-      SCRIPT_JSON: JSON.stringify(firstScriptResult, null, 2),
+    let currentScript = firstScriptResult;
+    let currentLength = firstLength;
+
+    for (let attempt = 1; attempt <= MAX_SHORTEN_RETRIES; attempt += 1) {
+      options.onProgress?.({
+        type: "warn",
+        stage: "script",
+        message: `script too long (${currentLength} chars), retrying ${attempt}/${MAX_SHORTEN_RETRIES}`,
+      });
+      const retryPrompt = await loadPromptSection(DEFAULT_PROMPTS_PATH, config.shortenPromptKey, {
+        CHAR_COUNT: String(currentLength),
+        SCRIPT_JSON: JSON.stringify(currentScript, null, 2),
+        TARGET_MAX: String(config.scriptMax),
+      });
+      const retryScriptResult = await requestScript(
+        retryPrompt.system,
+        retryPrompt.user,
+        maxTokens,
+      );
+
+      if (!retryScriptResult) {
+        return err({
+          type: "invalid_response",
+          message: "Claude returned malformed shortened script JSON",
+        });
+      }
+
+      currentScript = retryScriptResult;
+      currentLength = countScriptCharacters(retryScriptResult);
+
+      if (currentLength <= config.scriptMax) {
+        if (currentLength < config.scriptMin) {
+          console.warn(`Generated script is shorter than expected: ${currentLength} characters`);
+        }
+
+        return ok(currentScript);
+      }
+    }
+
+    return err({
+      type: "length_violation",
+      message: `Generated script is ${currentLength} characters, exceeding ${config.scriptMax}`,
+      actual: currentLength,
+      limit: config.scriptMax,
     });
-    const retryScriptResult = await requestScript(retryPrompt.system, retryPrompt.user, maxTokens);
-
-    if (!retryScriptResult) {
-      return err({
-        type: "invalid_response",
-        message: "Claude returned malformed shortened script JSON",
-      });
-    }
-
-    const retryLength = countScriptCharacters(retryScriptResult);
-
-    if (retryLength > config.scriptMax) {
-      return err({
-        type: "length_violation",
-        message: `Generated script is ${retryLength} characters, exceeding ${config.scriptMax}`,
-        actual: retryLength,
-        limit: config.scriptMax,
-      });
-    }
-
-    if (retryLength < config.scriptMin) {
-      console.warn(`Generated script is shorter than expected: ${retryLength} characters`);
-    }
-
-    return ok(retryScriptResult);
   } catch (cause) {
     return err({
       type: "api_error",

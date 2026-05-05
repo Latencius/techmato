@@ -47,7 +47,7 @@ export type {
   SegmentMetadata,
 } from "./merge/merge.js";
 export { mergeBroadcast } from "./merge/merge.js";
-export type { ScriptError } from "./script/script.js";
+export type { GenerateScriptOptions, ScriptError } from "./script/script.js";
 export { generateScript } from "./script/script.js";
 export type { SelectError, Selection } from "./select/select.js";
 export { selectArticles } from "./select/select.js";

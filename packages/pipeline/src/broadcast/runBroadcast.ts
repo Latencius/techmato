@@ -125,7 +125,12 @@ export async function runBroadcast(
   complete("extract");
   start("script");
 
-  const scriptResult = await generateScript(enrichedArticles, generatedAt, mode);
+  const scriptResult = await generateScript(
+    enrichedArticles,
+    generatedAt,
+    mode,
+    options.onProgress ? { onProgress: options.onProgress } : {},
+  );
   if (scriptResult.isErr()) {
     return failResult(options, "script", scriptResult.error);
   }

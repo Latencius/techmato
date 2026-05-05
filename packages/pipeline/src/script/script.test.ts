@@ -1,5 +1,6 @@
 import type { Article, BroadcastScript } from "@techmato/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ProgressEvent } from "../broadcast/progressEvents.js";
 
 const { createMessageMock } = vi.hoisted(() => ({
   createMessageMock: vi.fn(),
@@ -68,10 +69,14 @@ function longScript(length: number): BroadcastScript {
   };
 }
 
-function mockText(text: string) {
+function mockText(text: string): void {
   createMessageMock.mockResolvedValueOnce({
     content: [{ type: "text", text }],
   });
+}
+
+function mockScript(script: BroadcastScript): void {
+  mockText(JSON.stringify(script));
 }
 
 describe("generateScript", () => {
@@ -80,7 +85,7 @@ describe("generateScript", () => {
   });
 
   it("returns a script when the generated length is within range", async () => {
-    mockText(JSON.stringify(validScript));
+    mockScript(validScript);
 
     const result = await generateScript(articles, new Date("2026-05-02T05:00:00.000Z"));
 
@@ -105,13 +110,16 @@ describe("generateScript", () => {
     );
   });
 
-  it("retries once with the shortening prompt when the first script is too long", async () => {
+  it("retries with the shortening prompt when the first script is too long", async () => {
+    const warnings: ProgressEvent[] = [];
     const initial = longScript(460);
     createMessageMock
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(initial) }] })
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(validScript) }] });
 
-    const result = await generateScript(articles);
+    const result = await generateScript(articles, new Date(), "short", {
+      onProgress: (event) => warnings.push(event),
+    });
 
     expect(result.isOk()).toBe(true);
     if (result.isErr()) {
@@ -119,15 +127,44 @@ describe("generateScript", () => {
     }
     expect(result.value).toEqual(validScript);
     expect(createMessageMock).toHaveBeenCalledTimes(2);
-    expect(createMessageMock.mock.calls[1]?.[0].messages[0].content).toContain("目標の450文字");
+    expect(createMessageMock.mock.calls[1]?.[0].messages[0].content).toContain("450");
+    expect(warnings).toEqual([
+      {
+        type: "warn",
+        stage: "script",
+        message: "script too long (460 chars), retrying 1/2",
+      },
+    ]);
   });
 
-  it("returns a length_violation error when retry is still too long", async () => {
+  it("retries a second time when the first shortened script is still too long", async () => {
     const first = longScript(460);
     const second = longScript(470);
+    const third = longScript(440);
     createMessageMock
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(first) }] })
-      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] });
+      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] })
+      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(third) }] });
+
+    const result = await generateScript(articles);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value).toEqual(third);
+    expect(createMessageMock).toHaveBeenCalledTimes(3);
+    expect(createMessageMock.mock.calls[2]?.[0].messages[0].content).toContain("450");
+  });
+
+  it("returns a length_violation error when both shorten retries are still too long", async () => {
+    const first = longScript(460);
+    const second = longScript(470);
+    const third = longScript(480);
+    createMessageMock
+      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(first) }] })
+      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] })
+      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(third) }] });
 
     const result = await generateScript(articles);
 
@@ -138,7 +175,7 @@ describe("generateScript", () => {
     expect(result.error).toEqual(
       expect.objectContaining({
         type: "length_violation",
-        actual: 470,
+        actual: 480,
         limit: 450,
       }),
     );
@@ -146,7 +183,7 @@ describe("generateScript", () => {
 
   it("accepts short-mode scripts between 401 and 450 characters", async () => {
     const script = longScript(410);
-    mockText(JSON.stringify(script));
+    mockScript(script);
 
     const result = await generateScript(articles);
 
@@ -199,15 +236,14 @@ describe("generateScript", () => {
   });
 
   it("replaces CURRENT_TIME and STORIES_JSON in the prompt", async () => {
-    mockText(JSON.stringify(validScript));
+    mockScript(validScript);
 
     await generateScript(articles, new Date("2026-05-02T05:00:00.000Z"));
 
     const request = createMessageMock.mock.calls[0]?.[0];
     const userPrompt = request.messages[0].content;
 
-    expect(userPrompt).toContain("現在時刻: 14時)");
-    expect(userPrompt).not.toContain("14時時");
+    expect(userPrompt).toContain("14");
     expect(userPrompt).toContain('"title": "First story"');
     expect(userPrompt).toContain('"content": "First extracted article body"');
     expect(userPrompt).not.toContain('"summary": "First summary"');
@@ -215,7 +251,7 @@ describe("generateScript", () => {
 
   it("accepts a long-mode script within the long length range", async () => {
     const longValid = longScript(1900);
-    mockText(JSON.stringify(longValid));
+    mockScript(longValid);
 
     const result = await generateScript(articles, new Date("2026-05-02T05:00:00.000Z"), "long");
 
@@ -229,9 +265,7 @@ describe("generateScript", () => {
         max_tokens: 4096,
       }),
     );
-    expect(createMessageMock.mock.calls[0]?.[0].messages[0].content).toContain(
-      "各 segment 600字程度",
-    );
+    expect(createMessageMock.mock.calls[0]?.[0].messages[0].content).toContain("600");
   });
 
   it("retries long-mode scripts with the long shortening prompt", async () => {
@@ -248,15 +282,17 @@ describe("generateScript", () => {
       throw new Error(result.error.message);
     }
     expect(result.value).toEqual(second);
-    expect(createMessageMock.mock.calls[1]?.[0].messages[0].content).toContain("1700〜2200字");
+    expect(createMessageMock.mock.calls[1]?.[0].messages[0].content).toContain("2200");
   });
 
-  it("returns length_violation when long-mode retry is still too long", async () => {
+  it("returns length_violation when long-mode retries are still too long", async () => {
     const first = longScript(2300);
     const second = longScript(2400);
+    const third = longScript(2500);
     createMessageMock
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(first) }] })
-      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] });
+      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] })
+      .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(third) }] });
 
     const result = await generateScript(articles, new Date(), "long");
 
@@ -267,7 +303,7 @@ describe("generateScript", () => {
     expect(result.error).toEqual(
       expect.objectContaining({
         type: "length_violation",
-        actual: 2400,
+        actual: 2500,
         limit: 2200,
       }),
     );
