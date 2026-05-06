@@ -27,6 +27,7 @@ export async function runBroadcast(options: CliOptions): Promise<number> {
     voicevox: options.voicevox,
     gapMs: options.gapMs,
     outputRoot: options.outputRoot ?? resolveDefaultOutputRoot(import.meta),
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY ?? "",
     onProgress: (event) => handleProgress(event, logger),
   });
 

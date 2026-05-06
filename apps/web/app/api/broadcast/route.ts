@@ -2,9 +2,11 @@ import { BROADCAST_MODES, type BroadcastMode } from "@techmato/pipeline";
 import { formatOutputTimestamp } from "@techmato/pipeline/broadcast/render";
 import { type RunBroadcastOptions, runBroadcast } from "@techmato/pipeline/broadcast/runBroadcast";
 import { NextResponse } from "next/server";
+import { validateApiKey } from "../../../lib/server/apiKeyValidator";
 import { historyStore } from "../../../lib/server/historyStoreSingleton";
 import { jobStore } from "../../../lib/server/jobStore";
 import { createOutputStore, resolveWebOutputRoot } from "../../../lib/server/outputStore";
+import { verifyTurnstileToken } from "../../../lib/server/turnstile";
 
 export const runtime = "nodejs";
 
@@ -13,6 +15,8 @@ type BroadcastRequestBody = {
   maxStories?: unknown;
   gapMs?: unknown;
   mode?: unknown;
+  apiKey?: unknown;
+  turnstileToken?: unknown;
 };
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -28,13 +32,14 @@ export async function POST(request: Request): Promise<NextResponse> {
       voicevox: process.env.VOICEVOX_BASE_URL ?? "http://localhost:50021",
       gapMs: 300,
       outputRoot,
+      anthropicApiKey: "",
       broadcastId,
       generatedAt,
       historyStore,
     });
 
     if (!options.ok) {
-      return NextResponse.json({ error: options.message }, { status: 400 });
+      return NextResponse.json({ error: options.message }, { status: options.status });
     }
 
     const createResult = jobStore.create(broadcastId, outputDir);
@@ -91,17 +96,43 @@ async function runJob(options: RunBroadcastOptions): Promise<void> {
 async function parseRunOptions(
   request: Request,
   defaults: RunBroadcastOptions,
-): Promise<{ ok: true; value: RunBroadcastOptions } | { ok: false; message: string }> {
+): Promise<
+  { ok: true; value: RunBroadcastOptions } | { ok: false; status: 400 | 403; message: string }
+> {
   let body: BroadcastRequestBody;
   try {
     body = await readOptionalBody(request);
   } catch {
-    return { ok: false, message: "request body must be valid JSON" };
+    return { ok: false, status: 400, message: "request body must be valid JSON" };
   }
+  const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : body.apiKey;
+  const apiKeyValidation = validateApiKey(apiKey);
+
+  if (!apiKeyValidation.ok) {
+    return {
+      ok: false,
+      status: 400,
+      message: `invalid apiKey: ${apiKeyValidation.reason}`,
+    };
+  }
+
+  const turnstileResult = await verifyTurnstileToken(
+    typeof body.turnstileToken === "string" ? body.turnstileToken : undefined,
+  );
+  if (!turnstileResult.ok) {
+    return {
+      ok: false,
+      status: 403,
+      message: turnstileResult.message
+        ? `turnstile verification failed: ${turnstileResult.message}`
+        : `turnstile verification failed: ${turnstileResult.reason}`,
+    };
+  }
+
   const speaker = readNumber(body, "speaker", defaults.speaker);
   const mode = readMode(body);
   if (!mode) {
-    return { ok: false, message: "mode must be short or long" };
+    return { ok: false, status: 400, message: "mode must be short or long" };
   }
 
   const defaultMaxStories =
@@ -110,13 +141,13 @@ async function parseRunOptions(
   const gapMs = readNumber(body, "gapMs", defaults.gapMs);
 
   if (speaker === null) {
-    return { ok: false, message: "speaker must be a number" };
+    return { ok: false, status: 400, message: "speaker must be a number" };
   }
   if (maxStories === null) {
-    return { ok: false, message: "maxStories must be a number" };
+    return { ok: false, status: 400, message: "maxStories must be a number" };
   }
   if (gapMs === null) {
-    return { ok: false, message: "gapMs must be a number" };
+    return { ok: false, status: 400, message: "gapMs must be a number" };
   }
 
   return {
@@ -127,6 +158,7 @@ async function parseRunOptions(
       maxStories,
       mode,
       gapMs,
+      anthropicApiKey: apiKey as string,
     },
   };
 }

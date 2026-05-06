@@ -36,6 +36,7 @@ export async function selectArticles(
   articles: Article[],
   count = 4,
   mode: BroadcastMode = "short",
+  apiKey: string,
 ): Promise<Result<Selection[], SelectError>> {
   try {
     const prompt = await loadPromptSection(
@@ -46,9 +47,7 @@ export async function selectArticles(
         ARTICLES_JSON: JSON.stringify(toPromptArticles(articles), null, 2),
       },
     );
-    const anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
+    const anthropic = new Anthropic({ apiKey });
     const request: MessageCreateParamsNonStreaming = {
       model: MODEL,
       max_tokens: 2048,

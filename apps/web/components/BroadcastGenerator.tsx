@@ -2,6 +2,7 @@
 
 import type { BroadcastMode } from "@techmato/pipeline";
 import { useEffect, useReducer } from "react";
+import { clearApiKey, readApiKey, writeApiKey } from "../lib/client/apiKeyStorage";
 import {
   type BroadcastMetadataResponse,
   fetchBroadcast,
@@ -16,11 +17,15 @@ import { useProgressStream } from "../lib/client/useProgressStream";
 import { BroadcastButton } from "./BroadcastButton";
 import { BroadcastPlayer } from "./BroadcastPlayer";
 import { ProgressIndicator } from "./ProgressIndicator";
+import { SettingsButton } from "./SettingsButton";
+import { SettingsModal } from "./SettingsModal";
 
 type BroadcastMetadata = NonNullable<BroadcastMetadataResponse["metadata"]>;
 
 type GeneratorState = {
   mode: BroadcastMode;
+  apiKey: string | null;
+  settingsOpen: boolean;
   generation: { broadcastId: string | null; outputDir: string | null };
   starting: boolean;
   startError: string | null;
@@ -32,6 +37,11 @@ type GeneratorState = {
 
 type GeneratorAction =
   | { type: "set_mode"; mode: BroadcastMode }
+  | { type: "api_key_loaded"; apiKey: string | null }
+  | { type: "open_settings" }
+  | { type: "close_settings" }
+  | { type: "save_api_key"; apiKey: string }
+  | { type: "clear_api_key" }
   | { type: "start_requested" }
   | { type: "start_ok"; broadcastId: string; outputDir: string }
   | { type: "start_conflict"; broadcastId?: string }
@@ -45,6 +55,8 @@ type GeneratorAction =
 
 const INITIAL_STATE: GeneratorState = {
   mode: "short",
+  apiKey: null,
+  settingsOpen: false,
   generation: { broadcastId: null, outputDir: null },
   starting: false,
   startError: null,
@@ -67,6 +79,8 @@ export function BroadcastGenerator() {
     !!state.player;
 
   useEffect(() => {
+    dispatch({ type: "api_key_loaded", apiKey: readApiKey() });
+
     const lastBroadcastId = readLastBroadcastId();
     if (!lastBroadcastId) {
       return;
@@ -127,9 +141,14 @@ export function BroadcastGenerator() {
   }, [progress.events, state.player?.broadcastId]);
 
   async function handleStart() {
+    if (!state.apiKey) {
+      dispatch({ type: "open_settings" });
+      return;
+    }
+
     dispatch({ type: "start_requested" });
 
-    const result = await startBroadcast({ mode: state.mode });
+    const result = await startBroadcast({ mode: state.mode, apiKey: state.apiKey });
 
     if (result.ok) {
       dispatch({
@@ -187,12 +206,14 @@ export function BroadcastGenerator() {
           />
         </div>
         <p className="mt-3 text-sm leading-6 text-[#6f665b]">
-          1分版は4本のヘッドラインを素早く、5分版は3本を落ち着いて深掘りします。
+          1分版は4本のヘッドラインを素早く、5分版は3本を落ち着いて深掘りします。 Anthropic API
+          キーは設定から保存できます。
         </p>
       </div>
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <BroadcastButton busy={busy} onClick={handleStart} />
+        <SettingsButton onClick={() => dispatch({ type: "open_settings" })} />
         {state.lastCompleted && !state.player ? (
           <button
             type="button"
@@ -214,7 +235,7 @@ export function BroadcastGenerator() {
       </div>
 
       {state.loadingLast ? (
-        <p className="mt-4 text-sm text-[#6f665b]">前回の放送を確認しています</p>
+        <p className="mt-4 text-sm text-[#6f665b]">前回の放送を確認しています。</p>
       ) : null}
 
       {state.generation.broadcastId ? (
@@ -234,7 +255,7 @@ export function BroadcastGenerator() {
 
       {state.conflict ? (
         <div className="mt-6 max-w-3xl border border-[#d8b35d] bg-[#fff7dc] px-4 py-4 text-[#6d5720]">
-          <p className="font-semibold">他のジョブが実行中です</p>
+          <p className="font-semibold">他のジョブが実行中です。</p>
           {state.conflict.broadcastId ? (
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
               <p className="break-all text-sm">broadcastId: {state.conflict.broadcastId}</p>
@@ -259,6 +280,20 @@ export function BroadcastGenerator() {
           onRegenerate={() => dispatch({ type: "reset" })}
         />
       ) : null}
+
+      <SettingsModal
+        open={state.settingsOpen}
+        initialApiKey={state.apiKey}
+        onClose={() => dispatch({ type: "close_settings" })}
+        onSave={(apiKey) => {
+          writeApiKey(apiKey);
+          dispatch({ type: "save_api_key", apiKey });
+        }}
+        onClear={() => {
+          clearApiKey();
+          dispatch({ type: "clear_api_key" });
+        }}
+      />
     </div>
   );
 }
@@ -267,6 +302,16 @@ function reducer(state: GeneratorState, action: GeneratorAction): GeneratorState
   switch (action.type) {
     case "set_mode":
       return { ...state, mode: action.mode };
+    case "api_key_loaded":
+      return { ...state, apiKey: action.apiKey };
+    case "open_settings":
+      return { ...state, settingsOpen: true };
+    case "close_settings":
+      return { ...state, settingsOpen: false };
+    case "save_api_key":
+      return { ...state, apiKey: action.apiKey, settingsOpen: false };
+    case "clear_api_key":
+      return { ...state, apiKey: null, settingsOpen: false };
     case "start_requested":
       return {
         ...state,
@@ -318,6 +363,7 @@ function reducer(state: GeneratorState, action: GeneratorAction): GeneratorState
       return {
         ...INITIAL_STATE,
         mode: state.mode,
+        apiKey: state.apiKey,
         lastCompleted: state.lastCompleted,
       };
   }

@@ -27,10 +27,12 @@ export type FetchBroadcastResult =
 
 export type StartBroadcastOptions = {
   mode?: BroadcastMode;
+  apiKey: string;
+  turnstileToken?: string;
 };
 
 export async function startBroadcast(
-  options: StartBroadcastOptions = {},
+  options: StartBroadcastOptions,
 ): Promise<StartBroadcastResult> {
   try {
     const response = await fetch("/api/broadcast", buildStartRequest(options));
@@ -71,14 +73,14 @@ export async function startBroadcast(
 }
 
 function buildStartRequest(options: StartBroadcastOptions): RequestInit {
-  if (!options.mode) {
-    return { method: "POST" };
-  }
-
   return {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode: options.mode }),
+    body: JSON.stringify({
+      apiKey: options.apiKey,
+      ...(options.mode ? { mode: options.mode } : {}),
+      ...(options.turnstileToken ? { turnstileToken: options.turnstileToken } : {}),
+    }),
   };
 }
 

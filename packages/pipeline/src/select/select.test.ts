@@ -1,12 +1,17 @@
 import type { Article } from "@techmato/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { createMessageMock } = vi.hoisted(() => ({
+const { anthropicConstructorMock, createMessageMock } = vi.hoisted(() => ({
+  anthropicConstructorMock: vi.fn(),
   createMessageMock: vi.fn(),
 }));
 
 vi.mock("@anthropic-ai/sdk", () => ({
   default: class Anthropic {
+    constructor(options: unknown) {
+      anthropicConstructorMock(options);
+    }
+
     messages = {
       create: createMessageMock,
     };
@@ -39,9 +44,11 @@ const articles: Article[] = [
     publishedAt: new Date("2026-05-02T02:00:00.000Z"),
   },
 ];
+const TEST_API_KEY = `sk-ant-${"a".repeat(101)}`;
 
 describe("selectArticles", () => {
   beforeEach(() => {
+    anthropicConstructorMock.mockReset();
     createMessageMock.mockReset();
   });
 
@@ -60,7 +67,7 @@ describe("selectArticles", () => {
       ],
     });
 
-    const result = await selectArticles(articles, 2);
+    const result = await selectArticles(articles, 2, "short", TEST_API_KEY);
 
     expect(result.isOk()).toBe(true);
     if (result.isErr()) {
@@ -83,6 +90,7 @@ describe("selectArticles", () => {
         },
       }),
     );
+    expect(anthropicConstructorMock).toHaveBeenCalledWith({ apiKey: TEST_API_KEY });
 
     const request = createMessageMock.mock.calls[0]?.[0];
     expect(request.system).toContain("ニュース編集者");
@@ -111,7 +119,7 @@ describe("selectArticles", () => {
       ],
     });
 
-    const result = await selectArticles(articles, 4);
+    const result = await selectArticles(articles, 4, "short", TEST_API_KEY);
 
     expect(result.isOk()).toBe(true);
     if (result.isErr()) {
@@ -130,7 +138,7 @@ describe("selectArticles", () => {
       content: [{ type: "text", text: "not json" }],
     });
 
-    const result = await selectArticles(articles, 2);
+    const result = await selectArticles(articles, 2, "short", TEST_API_KEY);
 
     expect(result.isErr()).toBe(true);
     if (result.isOk()) {
@@ -146,7 +154,7 @@ describe("selectArticles", () => {
       ],
     });
 
-    const result = await selectArticles(articles, 1);
+    const result = await selectArticles(articles, 1, "short", TEST_API_KEY);
 
     expect(result.isErr()).toBe(true);
     if (result.isOk()) {
@@ -165,7 +173,7 @@ describe("selectArticles", () => {
       ],
     });
 
-    const result = await selectArticles(articles, 1);
+    const result = await selectArticles(articles, 1, "short", TEST_API_KEY);
 
     expect(result.isOk()).toBe(true);
     if (result.isErr()) {
@@ -186,7 +194,7 @@ describe("selectArticles", () => {
       ],
     });
 
-    const result = await selectArticles(articles, 3, "long");
+    const result = await selectArticles(articles, 3, "long", TEST_API_KEY);
 
     expect(result.isOk()).toBe(true);
     const request = createMessageMock.mock.calls[0]?.[0];

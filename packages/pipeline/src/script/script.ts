@@ -27,6 +27,7 @@ export async function generateScript(
   articles: Article[],
   now: Date = new Date(),
   mode: BroadcastMode = "short",
+  apiKey: string,
   options: GenerateScriptOptions = {},
 ): Promise<Result<BroadcastScript, ScriptError>> {
   try {
@@ -36,7 +37,12 @@ export async function generateScript(
       CURRENT_TIME: formatJstHour(now),
       STORIES_JSON: JSON.stringify(toPromptStories(articles), null, 2),
     });
-    const firstScriptResult = await requestScript(firstPrompt.system, firstPrompt.user, maxTokens);
+    const firstScriptResult = await requestScript(
+      firstPrompt.system,
+      firstPrompt.user,
+      maxTokens,
+      apiKey,
+    );
 
     if (!firstScriptResult) {
       return err({
@@ -73,6 +79,7 @@ export async function generateScript(
         retryPrompt.system,
         retryPrompt.user,
         maxTokens,
+        apiKey,
       );
 
       if (!retryScriptResult) {
@@ -113,10 +120,9 @@ async function requestScript(
   system: string | undefined,
   user: string,
   maxTokens: number,
+  apiKey: string,
 ): Promise<BroadcastScript | undefined> {
-  const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
+  const anthropic = new Anthropic({ apiKey });
   const request: MessageCreateParamsNonStreaming = {
     model: MODEL,
     max_tokens: maxTokens,

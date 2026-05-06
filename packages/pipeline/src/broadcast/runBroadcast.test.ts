@@ -63,6 +63,7 @@ const script: BroadcastScript = {
   ],
   closing: "Closing",
 };
+const TEST_API_KEY = `sk-ant-${"a".repeat(101)}`;
 
 let tempDirs: string[] = [];
 
@@ -89,6 +90,7 @@ describe("runBroadcast", () => {
       voicevox: "http://localhost:50021",
       gapMs: 300,
       outputRoot,
+      anthropicApiKey: TEST_API_KEY,
       onProgress: (event) => events.push(event),
     });
 
@@ -154,6 +156,7 @@ describe("runBroadcast", () => {
       voicevox: "http://localhost:50021",
       gapMs: 300,
       outputRoot,
+      anthropicApiKey: TEST_API_KEY,
       broadcastId: "custom-id",
       generatedAt: new Date("2026-05-03T03:00:00.000Z"),
       onProgress: (event) => events.push(event),
@@ -181,6 +184,7 @@ describe("runBroadcast", () => {
       voicevox: "http://localhost:50021",
       gapMs: 300,
       outputRoot,
+      anthropicApiKey: TEST_API_KEY,
       broadcastId: "history-id",
       generatedAt: new Date("2026-05-03T03:00:00.000Z"),
     });
@@ -215,6 +219,7 @@ describe("runBroadcast", () => {
       voicevox: "http://localhost:50021",
       gapMs: 300,
       outputRoot,
+      anthropicApiKey: TEST_API_KEY,
       broadcastId: "injected-history",
       generatedAt: new Date("2026-05-03T03:00:00.000Z"),
       historyStore: injectedHistoryStore,
@@ -249,6 +254,7 @@ describe("runBroadcast", () => {
       voicevox: "http://localhost:50021",
       gapMs: 300,
       outputRoot,
+      anthropicApiKey: TEST_API_KEY,
       broadcastId: "new-history",
       generatedAt: new Date("2026-06-01T00:00:00.000Z"),
     });
@@ -285,6 +291,7 @@ describe("runBroadcast", () => {
       voicevox: "http://localhost:50021",
       gapMs: 300,
       outputRoot,
+      anthropicApiKey: TEST_API_KEY,
       broadcastId: "new-history",
       generatedAt: new Date("2026-06-01T00:00:00.000Z"),
     });
@@ -309,16 +316,51 @@ describe("runBroadcast", () => {
       voicevox: "http://localhost:50021",
       gapMs: 300,
       outputRoot,
+      anthropicApiKey: TEST_API_KEY,
     });
 
     expect(result.isOk()).toBe(true);
-    expect(selectArticlesMock).toHaveBeenCalledWith(expect.any(Array), 3, "long");
+    expect(selectArticlesMock).toHaveBeenCalledWith(expect.any(Array), 3, "long", TEST_API_KEY);
     expect(generateScriptMock).toHaveBeenCalledWith(
       expect.any(Array),
       expect.any(Date),
       "long",
+      TEST_API_KEY,
       {},
     );
+  });
+
+  it("fails early when the Anthropic API key is invalid", async () => {
+    const outputRoot = await makeTempDir();
+    const events: ProgressEvent[] = [];
+    mockSuccessfulPipeline();
+
+    const result = await runBroadcast({
+      speaker: 3,
+      maxStories: 4,
+      voicevox: "http://localhost:50021",
+      gapMs: 300,
+      outputRoot,
+      anthropicApiKey: "",
+      onProgress: (event) => events.push(event),
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      throw new Error("Expected invalid API key to fail");
+    }
+    expect(result.error).toEqual({
+      stage: "select",
+      message: "Anthropic API key is required",
+    });
+    expect(events).toEqual([
+      {
+        type: "error",
+        stage: "select",
+        message: "Anthropic API key is required",
+      },
+    ]);
+    expect(fetchAllSourcesMock).not.toHaveBeenCalled();
   });
 
   it("emits error and stops when select fails", async () => {
@@ -335,6 +377,7 @@ describe("runBroadcast", () => {
       voicevox: "http://localhost:50021",
       gapMs: 300,
       outputRoot,
+      anthropicApiKey: TEST_API_KEY,
       onProgress: (event) => events.push(event),
     });
 
@@ -370,6 +413,7 @@ describe("runBroadcast", () => {
       voicevox: "http://localhost:50021",
       gapMs: 300,
       outputRoot,
+      anthropicApiKey: TEST_API_KEY,
       onProgress: (event) => events.push(event),
     });
 
@@ -396,6 +440,7 @@ describe("runBroadcast", () => {
       voicevox: "http://localhost:50021",
       gapMs: 300,
       outputRoot,
+      anthropicApiKey: TEST_API_KEY,
       onProgress: (event) => events.push(event),
     });
 
@@ -422,6 +467,7 @@ describe("runBroadcast", () => {
       voicevox: "http://localhost:50021",
       gapMs: 300,
       outputRoot,
+      anthropicApiKey: TEST_API_KEY,
       onProgress: (event) => events.push(event),
     });
 
@@ -448,6 +494,7 @@ describe("runBroadcast", () => {
       voicevox: "http://localhost:50021",
       gapMs: 300,
       outputRoot,
+      anthropicApiKey: TEST_API_KEY,
       onProgress: (event) => events.push(event),
     });
 

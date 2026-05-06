@@ -2,12 +2,17 @@ import type { Article, BroadcastScript } from "@techmato/types";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProgressEvent } from "../broadcast/progressEvents.js";
 
-const { createMessageMock } = vi.hoisted(() => ({
+const { anthropicConstructorMock, createMessageMock } = vi.hoisted(() => ({
+  anthropicConstructorMock: vi.fn(),
   createMessageMock: vi.fn(),
 }));
 
 vi.mock("@anthropic-ai/sdk", () => ({
   default: class Anthropic {
+    constructor(options: unknown) {
+      anthropicConstructorMock(options);
+    }
+
     messages = {
       create: createMessageMock,
     };
@@ -51,6 +56,7 @@ const validScript: BroadcastScript = {
   ],
   closing: "以上、本日のニュースでした。",
 };
+const TEST_API_KEY = `sk-ant-${"a".repeat(101)}`;
 
 function longScript(length: number): BroadcastScript {
   const opening = "こんにちは。";
@@ -81,13 +87,19 @@ function mockScript(script: BroadcastScript): void {
 
 describe("generateScript", () => {
   beforeEach(() => {
+    anthropicConstructorMock.mockReset();
     createMessageMock.mockReset();
   });
 
   it("returns a script when the generated length is within range", async () => {
     mockScript(validScript);
 
-    const result = await generateScript(articles, new Date("2026-05-02T05:00:00.000Z"));
+    const result = await generateScript(
+      articles,
+      new Date("2026-05-02T05:00:00.000Z"),
+      "short",
+      TEST_API_KEY,
+    );
 
     expect(result.isOk()).toBe(true);
     if (result.isErr()) {
@@ -108,6 +120,7 @@ describe("generateScript", () => {
         },
       }),
     );
+    expect(anthropicConstructorMock).toHaveBeenCalledWith({ apiKey: TEST_API_KEY });
   });
 
   it("retries with the shortening prompt when the first script is too long", async () => {
@@ -117,7 +130,7 @@ describe("generateScript", () => {
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(initial) }] })
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(validScript) }] });
 
-    const result = await generateScript(articles, new Date(), "short", {
+    const result = await generateScript(articles, new Date(), "short", TEST_API_KEY, {
       onProgress: (event) => warnings.push(event),
     });
 
@@ -146,7 +159,7 @@ describe("generateScript", () => {
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] })
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(third) }] });
 
-    const result = await generateScript(articles);
+    const result = await generateScript(articles, new Date(), "short", TEST_API_KEY);
 
     expect(result.isOk()).toBe(true);
     if (result.isErr()) {
@@ -166,7 +179,7 @@ describe("generateScript", () => {
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] })
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(third) }] });
 
-    const result = await generateScript(articles);
+    const result = await generateScript(articles, new Date(), "short", TEST_API_KEY);
 
     expect(result.isErr()).toBe(true);
     if (result.isOk()) {
@@ -185,7 +198,7 @@ describe("generateScript", () => {
     const script = longScript(410);
     mockScript(script);
 
-    const result = await generateScript(articles);
+    const result = await generateScript(articles, new Date(), "short", TEST_API_KEY);
 
     expect(result.isOk()).toBe(true);
     if (result.isErr()) {
@@ -202,7 +215,7 @@ describe("generateScript", () => {
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(first) }] })
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] });
 
-    const result = await generateScript(articles);
+    const result = await generateScript(articles, new Date(), "short", TEST_API_KEY);
 
     expect(result.isOk()).toBe(true);
     if (result.isErr()) {
@@ -214,7 +227,7 @@ describe("generateScript", () => {
   it("returns invalid_response for malformed JSON", async () => {
     mockText("not json");
 
-    const result = await generateScript(articles);
+    const result = await generateScript(articles, new Date(), "short", TEST_API_KEY);
 
     expect(result.isErr()).toBe(true);
     if (result.isOk()) {
@@ -226,7 +239,7 @@ describe("generateScript", () => {
   it("parses JSON fenced in a markdown code block", async () => {
     mockText(`\`\`\`json\n${JSON.stringify(validScript)}\n\`\`\``);
 
-    const result = await generateScript(articles);
+    const result = await generateScript(articles, new Date(), "short", TEST_API_KEY);
 
     expect(result.isOk()).toBe(true);
     if (result.isErr()) {
@@ -238,7 +251,7 @@ describe("generateScript", () => {
   it("replaces CURRENT_TIME and STORIES_JSON in the prompt", async () => {
     mockScript(validScript);
 
-    await generateScript(articles, new Date("2026-05-02T05:00:00.000Z"));
+    await generateScript(articles, new Date("2026-05-02T05:00:00.000Z"), "short", TEST_API_KEY);
 
     const request = createMessageMock.mock.calls[0]?.[0];
     const userPrompt = request.messages[0].content;
@@ -253,7 +266,12 @@ describe("generateScript", () => {
     const longValid = longScript(1900);
     mockScript(longValid);
 
-    const result = await generateScript(articles, new Date("2026-05-02T05:00:00.000Z"), "long");
+    const result = await generateScript(
+      articles,
+      new Date("2026-05-02T05:00:00.000Z"),
+      "long",
+      TEST_API_KEY,
+    );
 
     expect(result.isOk()).toBe(true);
     if (result.isErr()) {
@@ -275,7 +293,7 @@ describe("generateScript", () => {
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(first) }] })
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] });
 
-    const result = await generateScript(articles, new Date(), "long");
+    const result = await generateScript(articles, new Date(), "long", TEST_API_KEY);
 
     expect(result.isOk()).toBe(true);
     if (result.isErr()) {
@@ -294,7 +312,7 @@ describe("generateScript", () => {
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(second) }] })
       .mockResolvedValueOnce({ content: [{ type: "text", text: JSON.stringify(third) }] });
 
-    const result = await generateScript(articles, new Date(), "long");
+    const result = await generateScript(articles, new Date(), "long", TEST_API_KEY);
 
     expect(result.isErr()).toBe(true);
     if (result.isOk()) {

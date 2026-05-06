@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fetchBroadcast, startBroadcast } from "./broadcastApi.js";
 
+const TEST_API_KEY = `sk-ant-${"a".repeat(101)}`;
+
 describe("startBroadcast", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -17,12 +19,16 @@ describe("startBroadcast", () => {
       ),
     );
 
-    await expect(startBroadcast()).resolves.toEqual({
+    await expect(startBroadcast({ apiKey: TEST_API_KEY })).resolves.toEqual({
       ok: true,
       broadcastId: "broadcast-1",
       outputDir: "/tmp/output/broadcast-1",
     });
-    expect(fetch).toHaveBeenCalledWith("/api/broadcast", { method: "POST" });
+    expect(fetch).toHaveBeenCalledWith("/api/broadcast", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey: TEST_API_KEY }),
+    });
   });
 
   it("sends the requested broadcast mode", async () => {
@@ -36,12 +42,32 @@ describe("startBroadcast", () => {
       ),
     );
 
-    await startBroadcast({ mode: "long" });
+    await startBroadcast({ mode: "long", apiKey: TEST_API_KEY });
 
     expect(fetch).toHaveBeenCalledWith("/api/broadcast", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mode: "long" }),
+      body: JSON.stringify({ apiKey: TEST_API_KEY, mode: "long" }),
+    });
+  });
+
+  it("sends the Turnstile token when provided", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(202, {
+          broadcastId: "broadcast-1",
+          outputDir: "/tmp/output/broadcast-1",
+        }),
+      ),
+    );
+
+    await startBroadcast({ apiKey: TEST_API_KEY, turnstileToken: "token" });
+
+    expect(fetch).toHaveBeenCalledWith("/api/broadcast", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey: TEST_API_KEY, turnstileToken: "token" }),
     });
   });
 
@@ -51,7 +77,7 @@ describe("startBroadcast", () => {
       vi.fn().mockResolvedValue(jsonResponse(409, { broadcastId: "running-1" })),
     );
 
-    await expect(startBroadcast()).resolves.toEqual({
+    await expect(startBroadcast({ apiKey: TEST_API_KEY })).resolves.toEqual({
       ok: false,
       reason: "conflict",
       runningBroadcastId: "running-1",
@@ -61,7 +87,7 @@ describe("startBroadcast", () => {
   it("returns an error message for non-202/409 responses", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(500, { error: "boom" })));
 
-    await expect(startBroadcast()).resolves.toEqual({
+    await expect(startBroadcast({ apiKey: TEST_API_KEY })).resolves.toEqual({
       ok: false,
       reason: "error",
       message: "boom",
@@ -71,7 +97,7 @@ describe("startBroadcast", () => {
   it("returns an error message when fetch throws", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
 
-    await expect(startBroadcast()).resolves.toEqual({
+    await expect(startBroadcast({ apiKey: TEST_API_KEY })).resolves.toEqual({
       ok: false,
       reason: "error",
       message: "network down",

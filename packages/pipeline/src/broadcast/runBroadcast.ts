@@ -24,6 +24,7 @@ export type RunBroadcastOptions = {
   voicevox: string;
   gapMs: number;
   outputRoot: string;
+  anthropicApiKey: string;
   mode?: BroadcastMode;
   broadcastId?: string;
   generatedAt?: Date;
@@ -68,6 +69,11 @@ export async function runBroadcast(
   const mode = options.mode ?? "short";
   const broadcastId = options.broadcastId ?? formatOutputTimestamp(generatedAt);
   const outputDir = join(options.outputRoot, broadcastId);
+  const apiKeyError = validateAnthropicApiKey(options.anthropicApiKey);
+
+  if (apiKeyError) {
+    return fail(options, "select", apiKeyError);
+  }
 
   const start = (step: ProgressEventStep) =>
     options.onProgress?.({
@@ -113,7 +119,12 @@ export async function runBroadcast(
   complete("fetch");
   start("select");
 
-  const selectionResult = await selectArticles(fetchResult.articles, options.maxStories, mode);
+  const selectionResult = await selectArticles(
+    fetchResult.articles,
+    options.maxStories,
+    mode,
+    options.anthropicApiKey.trim(),
+  );
   if (selectionResult.isErr()) {
     return failResult(options, "select", selectionResult.error);
   }
@@ -131,6 +142,7 @@ export async function runBroadcast(
     enrichedArticles,
     generatedAt,
     mode,
+    options.anthropicApiKey.trim(),
     options.onProgress ? { onProgress: options.onProgress } : {},
   );
   if (scriptResult.isErr()) {
@@ -379,4 +391,20 @@ function fail(
 
 function stepIndex(step: ProgressEventStep): number {
   return STEPS.indexOf(step) + 1;
+}
+
+function validateAnthropicApiKey(value: string): string | null {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "Anthropic API key is required";
+  }
+  if (!trimmed.startsWith("sk-ant-")) {
+    return "Anthropic API key must start with sk-ant-";
+  }
+  if (trimmed.length < 100) {
+    return "Anthropic API key is too short";
+  }
+
+  return null;
 }
