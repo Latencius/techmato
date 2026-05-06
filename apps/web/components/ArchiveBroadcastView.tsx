@@ -5,13 +5,17 @@ import type { SegmentsJson, StoriesJson } from "@techmato/pipeline/broadcast/ren
 import Link from "next/link";
 import { BroadcastPlayer } from "./BroadcastPlayer";
 import { Footer } from "./Footer";
+import { ShareButton } from "./ShareButton";
 
 type Props = {
   entry: HistoryEntry;
   metadata: { segments: SegmentsJson; stories: StoriesJson };
+  baseUrl: string;
 };
 
-export function ArchiveBroadcastView({ entry, metadata }: Props) {
+export function ArchiveBroadcastView({ entry, metadata, baseUrl }: Props) {
+  const shareUrl = `${baseUrl}/archive/${encodeURIComponent(entry.id)}`;
+
   return (
     <main className="min-h-screen bg-[#f6f4ef] px-6 py-8 text-[#171717]">
       <section className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl flex-col justify-between">
@@ -43,6 +47,7 @@ export function ArchiveBroadcastView({ entry, metadata }: Props) {
               </div>
 
               <nav className="flex shrink-0 flex-wrap gap-3">
+                <ShareButton title={entry.title} url={shareUrl} />
                 <Link
                   href="/archive"
                   className="min-h-12 border border-[#171717] bg-[#fffaf0] px-5 py-3 text-sm font-semibold text-[#171717] shadow-[5px_5px_0_#ded4c1] transition hover:-translate-y-0.5"
