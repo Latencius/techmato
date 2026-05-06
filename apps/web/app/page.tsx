@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { BroadcastGenerator } from "../components/BroadcastGenerator";
 
 export default function Home() {
@@ -8,9 +9,17 @@ export default function Home() {
           <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#6f6a5f]">
             techmato
           </p>
-          <p className="hidden text-sm text-[#6f6a5f] sm:block">
-            short or deep-dive tech broadcast
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="hidden text-sm text-[#6f6a5f] sm:block">
+              short or deep-dive tech broadcast
+            </p>
+            <Link
+              href="/archive"
+              className="border border-[#171717] bg-[#fffaf0] px-3 py-2 text-xs font-semibold text-[#171717] shadow-[4px_4px_0_#ded4c1] transition hover:-translate-y-0.5"
+            >
+              過去の放送 →
+            </Link>
+          </div>
         </header>
 
         <div className="grid gap-10 py-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(420px,1.05fr)] lg:items-center">

@@ -1,6 +1,7 @@
 "use client";
 
 import type { HistoryEntry } from "@techmato/pipeline";
+import Link from "next/link";
 
 type Props = {
   entry: HistoryEntry;
@@ -49,6 +50,13 @@ export function ArchiveItem({ entry, onToggleFavorite, onDelete }: Props) {
         </div>
 
         <div className="flex shrink-0 gap-2">
+          <Link
+            href={`/archive/${encodeURIComponent(entry.id)}`}
+            aria-label={`「${entry.title}」を再生`}
+            className="grid size-11 place-items-center border border-[#171717] bg-[#171717] text-base font-bold text-[#fffaf0] transition hover:-translate-y-0.5"
+          >
+            ▶
+          </Link>
           <button
             type="button"
             aria-label={entry.favorite ? "お気に入りから外す" : "お気に入りに追加"}
