@@ -1,7 +1,7 @@
 "use client";
 
 import type { BroadcastMode } from "@techmato/pipeline";
-import { useEffect, useReducer } from "react";
+import { useCallback, useEffect, useReducer } from "react";
 import { clearApiKey, readApiKey, writeApiKey } from "../lib/client/apiKeyStorage";
 import {
   type BroadcastMetadataResponse,
@@ -19,6 +19,7 @@ import { BroadcastPlayer } from "./BroadcastPlayer";
 import { ProgressIndicator } from "./ProgressIndicator";
 import { SettingsButton } from "./SettingsButton";
 import { SettingsModal } from "./SettingsModal";
+import { TurnstileWidget } from "./TurnstileWidget";
 
 type BroadcastMetadata = NonNullable<BroadcastMetadataResponse["metadata"]>;
 
@@ -33,6 +34,7 @@ type GeneratorState = {
   lastCompleted: { broadcastId: string; metadata: BroadcastMetadata } | null;
   player: { broadcastId: string; metadata: BroadcastMetadata } | null;
   loadingLast: boolean;
+  turnstileToken: string;
 };
 
 type GeneratorAction =
@@ -51,6 +53,7 @@ type GeneratorAction =
   | { type: "last_loaded"; broadcastId: string; metadata: BroadcastMetadata }
   | { type: "last_missing" }
   | { type: "show_player"; broadcastId: string; metadata: BroadcastMetadata }
+  | { type: "turnstile_token"; token: string }
   | { type: "reset" };
 
 const INITIAL_STATE: GeneratorState = {
@@ -64,11 +67,13 @@ const INITIAL_STATE: GeneratorState = {
   lastCompleted: null,
   player: null,
   loadingLast: false,
+  turnstileToken: "",
 };
 
 export function BroadcastGenerator() {
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
   const progress = useProgressStream(state.generation.broadcastId);
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY?.trim();
   const busy =
     state.starting || progress.status === "connecting" || progress.status === "streaming";
   const canRegenerate =
@@ -77,6 +82,9 @@ export function BroadcastGenerator() {
     progress.status === "closed" ||
     (!!state.startError && !state.starting) ||
     !!state.player;
+  const handleTurnstileToken = useCallback((token: string) => {
+    dispatch({ type: "turnstile_token", token });
+  }, []);
 
   useEffect(() => {
     dispatch({ type: "api_key_loaded", apiKey: readApiKey() });
@@ -145,10 +153,21 @@ export function BroadcastGenerator() {
       dispatch({ type: "open_settings" });
       return;
     }
+    if (turnstileSiteKey && !state.turnstileToken) {
+      dispatch({
+        type: "start_error",
+        message: "人間確認が必要です。Turnstile の確認を完了してください。",
+      });
+      return;
+    }
 
     dispatch({ type: "start_requested" });
 
-    const result = await startBroadcast({ mode: state.mode, apiKey: state.apiKey });
+    const result = await startBroadcast({
+      mode: state.mode,
+      apiKey: state.apiKey,
+      ...(turnstileSiteKey ? { turnstileToken: state.turnstileToken } : {}),
+    });
 
     if (result.ok) {
       dispatch({
@@ -210,6 +229,16 @@ export function BroadcastGenerator() {
           キーは設定から保存できます。
         </p>
       </div>
+
+      {turnstileSiteKey ? (
+        <div className="mb-5 max-w-3xl border border-[#d8cfbd] bg-[#fffaf0] p-4 shadow-[5px_5px_0_#ded4c1]">
+          <p className="mb-3 text-sm font-semibold text-[#171717]">人間確認</p>
+          <TurnstileWidget siteKey={turnstileSiteKey} onToken={handleTurnstileToken} />
+          <p className="mt-3 text-xs leading-5 text-[#6f665b]">
+            公開環境では、生成前に Cloudflare Turnstile の確認が必要です。
+          </p>
+        </div>
+      ) : null}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <BroadcastButton busy={busy} onClick={handleStart} />
@@ -359,12 +388,15 @@ function reducer(state: GeneratorState, action: GeneratorAction): GeneratorState
         player: { broadcastId: action.broadcastId, metadata: action.metadata },
         lastCompleted: { broadcastId: action.broadcastId, metadata: action.metadata },
       };
+    case "turnstile_token":
+      return { ...state, turnstileToken: action.token, startError: null };
     case "reset":
       return {
         ...INITIAL_STATE,
         mode: state.mode,
         apiKey: state.apiKey,
         lastCompleted: state.lastCompleted,
+        turnstileToken: state.turnstileToken,
       };
   }
 }

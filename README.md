@@ -14,6 +14,7 @@ AI/テック関連の最新ニュースを収集して、約60秒の音声ニュ
 4. **[docs/ROADMAP.md](./docs/ROADMAP.md)** — フェーズ別実装計画
 5. **[docs/PROMPTS.md](./docs/PROMPTS.md)** — Claudeプロンプト(品質の要)
 6. **[docs/SOURCES.md](./docs/SOURCES.md)** — ニュースソース一覧
+7. **[docs/DEPLOY.md](./docs/DEPLOY.md)** — Cloudflare Tunnel / Turnstile / Rate Limiting デプロイ手順
 
 ## 開発の進め方
 
