@@ -171,3 +171,73 @@
 - プロンプトの変更はdocs/PROMPTS.mdに必ず反映
 - ニュースソースの追加・変更はdocs/SOURCES.mdを更新
 ```
+
+---
+
+## Phase 5: Multi-language (planned)
+
+### Goal
+日本語と英語を切り替え可能にし、ja×short/long, en×short/long の 4 パターンを
+同じパイプラインで扱えるようにする。UI は日本語固定とし、生成コンテンツのみ
+言語切替対応。
+
+### Confirmed design decisions
+- BroadcastLanguage = "ja" | "en" を broadcast 実行オプションに追加
+- mode と language は直交する2軸 (短尺/長尺 × 日本語/英語)
+- 履歴 (index.json HistoryEntry) に language フィールド追加
+- archive ページに language フィルタ追加
+- 英語版も BYOK 必須 (OpenAI TTS API キーをユーザー持参)
+  - サーバ側固定キーは公開モデルでコスト暴走リスクのため不採用
+- UI 自体は日本語固定 (next-intl 等の i18n は導入しない)
+- デフォルト言語は初回日本語、以後は localStorage で前回選択保持
+
+### TTS Provider 抽象化
+- type TtsProvider = "voicevox" | "openai_tts"
+- synthesizeScript の options に provider と language を渡す
+- voicevox: ja のみ
+- openai_tts: en のみ (将来 ja も対応可能だが MVP は en 専用)
+- ファイル構成案:
+  - packages/pipeline/src/tts/voicevox.ts (現 tts.ts をリネーム)
+  - packages/pipeline/src/tts/openai_tts.ts (新規)
+  - packages/pipeline/src/tts/provider.ts (抽象層)
+
+### プロンプト構成
+- docs/PROMPTS.md は ja のみ
+- 英語版は docs/PROMPTS_EN.md として別ファイル化
+  - または prompts/{ja,en}/{short,long}.md 構造に再編
+  - 英語版は直訳ではなく英語ラジオニュース調 (Here are today's top stories...)
+
+### ニュースソース
+- packages/pipeline/src/sources/registry.ts を language ベースで分割
+- ja: hackernews (en だが日本でも読まれる) / publickey / その他
+- en: hackernews / techcrunch / theverge / arstechnica / github trending
+- 言語ごとに有効なソースリストを切り替え
+
+### 字幕の文分割
+- splitJapaneseSentences は ja のみ対応
+- 英語用に splitEnglishSentences を新設
+  - Intl.Segmenter が使える環境では優先
+  - fallback: 正規表現 (URL や略語を考慮した方式)
+- captions.ts でも language を引数に取り、適切な分割関数を呼ぶ
+
+### UI 変更
+- トップに言語トグルを追加: [日本語] [English]
+- 既存の [1分版] [5分版] トグルは維持
+- BYOK 設定モーダルに「OpenAI API キー」入力欄を追加 (英語生成時のみ要求)
+- BroadcastPlayer の <track srclang> を language に応じて切替
+- フッターの VOICEVOX クレジットは ja 時のみ表示
+  英語生成時は "English voice by OpenAI" 等のクレジットに切替
+
+### 段階的実装順
+1. BroadcastLanguage 型と履歴 metadata 拡張
+2. 英語プロンプト追加 (台本生成まで)
+3. TTS provider 抽象化
+4. OpenAI TTS provider 実装 + BYOK UI 拡張
+5. 英語字幕の文分割
+6. archive / player / credits の language 対応
+7. 既存 ja ルートの regression テスト整備
+
+### 注意点
+- 英語版は日本語プロンプトの直訳にしない
+- 英語 TTS は OpenAI TTS の price ($0.015/分前後) をユーザーに事前明示
+- 切替えても既存 ja の挙動は完全維持
