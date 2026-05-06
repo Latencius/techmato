@@ -1,7 +1,7 @@
 "use client";
 
 import type { SegmentsJson, StoriesJson } from "@techmato/pipeline/broadcast/render";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { computeCurrentSegmentIndex, pairStoriesWithSegments } from "../lib/client/segmentTimeline";
 
 type Props = {
@@ -14,6 +14,8 @@ export function BroadcastPlayer({ broadcastId, metadata, onRegenerate }: Props) 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [activeCueText, setActiveCueText] = useState("");
+  const [captionsEnabled, setCaptionsEnabled] = useState(true);
   const audioUrl = `/api/broadcast/${encodeURIComponent(broadcastId)}/audio`;
   const captionsUrl = `/api/broadcast/${encodeURIComponent(broadcastId)}/captions`;
   const pairs = useMemo(
@@ -24,6 +26,42 @@ export function BroadcastPlayer({ broadcastId, metadata, onRegenerate }: Props) 
     () => computeCurrentSegmentIndex(currentTime, metadata.segments.segments),
     [currentTime, metadata.segments.segments],
   );
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) {
+      return;
+    }
+
+    const maybeTrack = audio.textTracks[0];
+    if (!maybeTrack) {
+      return;
+    }
+
+    const track = maybeTrack;
+    track.mode = "hidden";
+
+    function handleCueChange() {
+      const activeCues = track.activeCues;
+      if (!activeCues || activeCues.length === 0) {
+        setActiveCueText("");
+        return;
+      }
+
+      setActiveCueText(
+        Array.from(activeCues)
+          .map((cue) => (cue as VTTCue).text)
+          .join("\n"),
+      );
+    }
+
+    handleCueChange();
+    track.addEventListener("cuechange", handleCueChange);
+
+    return () => {
+      track.removeEventListener("cuechange", handleCueChange);
+    };
+  }, []);
 
   function seekTo(startSec: number) {
     const audio = audioRef.current;
@@ -48,7 +86,7 @@ export function BroadcastPlayer({ broadcastId, metadata, onRegenerate }: Props) 
         </p>
       </div>
 
-      {/* biome-ignore lint/a11y/useMediaCaption: WebVTT subtitles are provided through the default subtitles track requested for this player. */}
+      {/* biome-ignore lint/a11y/useMediaCaption: WebVTT subtitles are read from the default track and rendered inline below the audio controls. */}
       <audio
         ref={audioRef}
         controls
@@ -62,6 +100,26 @@ export function BroadcastPlayer({ broadcastId, metadata, onRegenerate }: Props) 
         <source src={audioUrl} type="audio/wav" />
         <track default kind="subtitles" src={captionsUrl} srcLang="ja" label="日本語" />
       </audio>
+
+      <div className="mt-3 flex justify-end">
+        <button
+          type="button"
+          onClick={() => setCaptionsEnabled((value) => !value)}
+          className="border border-[#171717] bg-[#fffaf0] px-3 py-1 text-xs font-semibold text-[#171717] transition hover:bg-[#171717] hover:text-[#fffaf0]"
+          aria-pressed={captionsEnabled}
+        >
+          字幕 {captionsEnabled ? "ON" : "OFF"}
+        </button>
+      </div>
+
+      {captionsEnabled && activeCueText ? (
+        <div
+          aria-live="polite"
+          className="mt-3 min-h-12 whitespace-pre-line border border-[#171717] bg-[#fffaf0] px-4 py-3 text-base leading-7 text-[#171717] shadow-[5px_5px_0_#ded4c1]"
+        >
+          {activeCueText}
+        </div>
+      ) : null}
 
       <div className="mt-6 space-y-3">
         {pairs.map(({ story, segment }, index) => {
