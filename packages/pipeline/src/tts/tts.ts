@@ -20,7 +20,13 @@ export type TtsCue = {
   text: string;
   filePath: string;
   durationSec: number;
+  chunks?: TtsChunk[];
   segmentIndex?: number;
+};
+
+export type TtsChunk = {
+  text: string;
+  durationSec: number;
 };
 
 export type TtsManifest = {
@@ -43,6 +49,11 @@ type CueInput = {
 };
 
 type VoicevoxAudioQuery = Record<string, unknown>;
+
+type SynthesizedAudio = {
+  wav: Uint8Array;
+  chunks: TtsChunk[];
+};
 
 const DEFAULT_BASE_URL = "http://localhost:50021";
 const DEFAULT_SPEAKER = 3;
@@ -141,7 +152,13 @@ async function synthesizeCue({
   const chunks = splitJapaneseSentences(cueInput.text);
   const synthesisResult =
     chunks.length <= 1
-      ? await synthesizeText(baseUrl, speaker, cueInput.text, speedScale)
+      ? await synthesizeSingleChunk(
+          baseUrl,
+          speaker,
+          cueInput.text,
+          chunks[0] ?? cueInput.text,
+          speedScale,
+        )
       : await synthesizeChunks(baseUrl, speaker, cueInput.text, chunks, speedScale);
 
   if (synthesisResult.isErr()) {
@@ -151,7 +168,7 @@ async function synthesizeCue({
   let durationSec: number;
 
   try {
-    durationSec = parseWavDurationSec(synthesisResult.value);
+    durationSec = parseWavDurationSec(synthesisResult.value.wav);
   } catch (cause) {
     return err({
       type: "synthesis_failed",
@@ -162,7 +179,7 @@ async function synthesizeCue({
   }
 
   try {
-    await writeFile(cueInput.filePath, synthesisResult.value);
+    await writeFile(cueInput.filePath, synthesisResult.value.wav);
   } catch (cause) {
     return err({
       type: "write_failed",
@@ -175,7 +192,36 @@ async function synthesizeCue({
   return ok({
     ...cueInput,
     durationSec,
+    chunks: synthesisResult.value.chunks,
   });
+}
+
+async function synthesizeSingleChunk(
+  baseUrl: string,
+  speaker: number,
+  cueText: string,
+  chunkText: string,
+  speedScale: number,
+): Promise<Result<SynthesizedAudio, TtsError>> {
+  const wavResult = await synthesizeText(baseUrl, speaker, cueText, speedScale);
+
+  if (wavResult.isErr()) {
+    return err(wavResult.error);
+  }
+
+  try {
+    return ok({
+      wav: wavResult.value,
+      chunks: [{ text: chunkText, durationSec: parseWavDurationSec(wavResult.value) }],
+    });
+  } catch (cause) {
+    return err({
+      type: "synthesis_failed",
+      text: cueText,
+      status: 200,
+      message: cause instanceof Error ? cause.message : "Invalid WAV response",
+    });
+  }
 }
 
 async function synthesizeChunks(
@@ -184,8 +230,9 @@ async function synthesizeChunks(
   cueText: string,
   chunks: string[],
   speedScale: number,
-): Promise<Result<Uint8Array, TtsError>> {
+): Promise<Result<SynthesizedAudio, TtsError>> {
   const parts = [];
+  const synthesizedChunks: TtsChunk[] = [];
 
   for (const chunk of chunks) {
     const chunkResult = await synthesizeText(baseUrl, speaker, chunk, speedScale);
@@ -195,6 +242,10 @@ async function synthesizeChunks(
     }
 
     try {
+      synthesizedChunks.push({
+        text: chunk,
+        durationSec: parseWavDurationSec(chunkResult.value),
+      });
       parts.push(splitWav(chunkResult.value));
     } catch (cause) {
       return err({
@@ -207,7 +258,10 @@ async function synthesizeChunks(
   }
 
   try {
-    return ok(concatWav(parts));
+    return ok({
+      wav: concatWav(parts),
+      chunks: synthesizedChunks,
+    });
   } catch (cause) {
     return err({
       type: "synthesis_failed",

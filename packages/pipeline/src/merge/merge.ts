@@ -3,6 +3,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import type { BroadcastSegment } from "@techmato/types";
 import { err, ok, type Result } from "neverthrow";
+import { buildSubtitleCues } from "../captions/buildCaptions.js";
+import type { SubtitleCue } from "../captions/captions.js";
 import type { TtsCue, TtsManifest } from "../tts/tts.js";
 
 export type SegmentMetadata = {
@@ -24,6 +26,7 @@ export type MergeResult = {
   audioPath: string;
   totalDurationSec: number;
   segments: BroadcastSegment[];
+  subtitleCues: SubtitleCue[];
 };
 
 export type MergeError =
@@ -116,6 +119,7 @@ export async function mergeBroadcast(
     audioPath,
     totalDurationSec: totalDuration(options.manifest.cues, gapSec),
     segments: buildSegments(options.manifest.cues, options.segmentMetadata, gapSec),
+    subtitleCues: buildSubtitleCues(options.manifest.cues, gapSec),
   });
 }
 

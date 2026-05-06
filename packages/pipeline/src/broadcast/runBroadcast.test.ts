@@ -143,6 +143,9 @@ describe("runBroadcast", () => {
     await expect(
       readFile(join(result.value.outputDir, "segments.json"), "utf8"),
     ).resolves.toContain("broadcast.wav");
+    await expect(readFile(join(result.value.outputDir, "captions.vtt"), "utf8")).resolves.toContain(
+      "WEBVTT",
+    );
   });
 
   it("uses caller-provided broadcast id and generated time", async () => {
@@ -538,6 +541,13 @@ function mockSuccessfulPipeline(): void {
     ok({
       audioPath: "broadcast.wav",
       totalDurationSec: 6.9,
+      subtitleCues: [
+        {
+          text: "Narration",
+          startSec: 1.8,
+          endSec: 3.3,
+        },
+      ],
       segments: [
         {
           title: "Story",

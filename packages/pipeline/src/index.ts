@@ -26,6 +26,9 @@ export type {
   RunBroadcastSuccess,
 } from "./broadcast/runBroadcast.js";
 export { runBroadcast } from "./broadcast/runBroadcast.js";
+export { buildSubtitleCues } from "./captions/buildCaptions.js";
+export type { CaptionsFile, SubtitleCue } from "./captions/captions.js";
+export { buildVtt } from "./captions/captions.js";
 export { extractArticleContent, extractFullContent } from "./extract/extract.js";
 export { type BackfillResult, backfillFromOutputDir } from "./history/backfill.js";
 export {

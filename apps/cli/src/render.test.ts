@@ -155,6 +155,7 @@ describe("formatSegmentsJson", () => {
     const mergeResult: MergeResult = {
       audioPath: "C:/tmp/broadcast.wav",
       totalDurationSec: 62.3,
+      subtitleCues: [],
       segments: [
         {
           title: "Story one",

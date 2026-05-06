@@ -254,6 +254,79 @@ describe("mergeBroadcast", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("returns absolute subtitle cues from TTS chunks", async () => {
+    const dir = await makeTempDir();
+    const manifest = manifestFor(dir);
+    const openingCue = manifest.cues[0];
+    const firstSegmentCue = manifest.cues[1];
+    if (!openingCue || !firstSegmentCue) {
+      throw new Error("Expected test manifest cues");
+    }
+    openingCue.chunks = [
+      { text: "Opening A.", durationSec: 0.5 },
+      { text: "Opening B.", durationSec: 1 },
+    ];
+    firstSegmentCue.chunks = [
+      { text: "Segment A.", durationSec: 0.75 },
+      { text: "Segment B.", durationSec: 0.75 },
+    ];
+    const runner = vi.fn().mockResolvedValue({ exitCode: 0, stderr: "" });
+
+    try {
+      const result = await mergeBroadcast(
+        {
+          manifest,
+          segmentMetadata: metadata,
+          outputDir: dir,
+        },
+        runner,
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (result.isErr()) {
+        return;
+      }
+      expect(result.value.subtitleCues.slice(0, 4)).toEqual([
+        { text: "Opening A.", startSec: 0, endSec: 0.5 },
+        { text: "Opening B.", startSec: 0.5, endSec: 1.5 },
+        { text: "Segment A.", startSec: 1.8, endSec: 2.55 },
+        { text: "Segment B.", startSec: 2.55, endSec: 3.3 },
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to a single subtitle cue when chunk metadata is absent", async () => {
+    const dir = await makeTempDir();
+    const manifest = manifestFor(dir);
+    const runner = vi.fn().mockResolvedValue({ exitCode: 0, stderr: "" });
+
+    try {
+      const result = await mergeBroadcast(
+        {
+          manifest,
+          segmentMetadata: metadata,
+          outputDir: dir,
+          gapMs: 0,
+        },
+        runner,
+      );
+
+      expect(result.isOk()).toBe(true);
+      if (result.isErr()) {
+        return;
+      }
+      expect(result.value.subtitleCues[0]).toEqual({
+        text: "Opening",
+        startSec: 0,
+        endSec: 1.5,
+      });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 async function makeTempDir(): Promise<string> {

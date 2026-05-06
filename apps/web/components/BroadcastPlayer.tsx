@@ -14,6 +14,8 @@ export function BroadcastPlayer({ broadcastId, metadata, onRegenerate }: Props) 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const audioUrl = `/api/broadcast/${encodeURIComponent(broadcastId)}/audio`;
+  const captionsUrl = `/api/broadcast/${encodeURIComponent(broadcastId)}/captions`;
   const pairs = useMemo(
     () => pairStoriesWithSegments(metadata.stories, metadata.segments.segments),
     [metadata],
@@ -46,17 +48,19 @@ export function BroadcastPlayer({ broadcastId, metadata, onRegenerate }: Props) 
         </p>
       </div>
 
+      {/* biome-ignore lint/a11y/useMediaCaption: WebVTT subtitles are provided through the default subtitles track requested for this player. */}
       <audio
         ref={audioRef}
         controls
-        src={`/api/broadcast/${encodeURIComponent(broadcastId)}/audio`}
+        preload="auto"
         className="mt-5 w-full"
         onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
         onEnded={() => setIsPlaying(false)}
       >
-        <track kind="captions" />
+        <source src={audioUrl} type="audio/wav" />
+        <track default kind="subtitles" src={captionsUrl} srcLang="ja" label="日本語" />
       </audio>
 
       <div className="mt-6 space-y-3">
@@ -113,8 +117,8 @@ export function BroadcastPlayer({ broadcastId, metadata, onRegenerate }: Props) 
       <div className="mt-6 flex flex-col gap-3 border-t border-[#e7ddca] pt-5 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-[#6f665b]">
           {isPlaying
-            ? "再生中のストーリーをハイライトしています"
-            : "ストーリーを選ぶと、その位置から再生します"}
+            ? "再生中のストーリーをハイライトしています。"
+            : "ストーリーを選ぶと、その位置から再生します。"}
         </p>
         {onRegenerate ? (
           <button

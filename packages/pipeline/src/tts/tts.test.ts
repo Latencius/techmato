@@ -269,6 +269,24 @@ describe("synthesizeScript", () => {
     expect(fetchMock).toHaveBeenCalledTimes(8);
     expect(result.value.totalDurationSec).toBeCloseTo(4.5, 5);
     expect(result.value.cues[1]?.durationSec).toBeCloseTo(2.75, 5);
+    expect(result.value.cues[1]?.chunks?.length).toBe(2);
+    expect(result.value.cues[1]?.chunks?.[0]?.durationSec).toBeCloseTo(1.25, 5);
+    expect(result.value.cues[1]?.chunks?.[1]?.durationSec).toBeCloseTo(1.5, 5);
+  });
+
+  it("records a single chunk for one-sentence cues", async () => {
+    const outputDir = await makeTempDir();
+    mockVoicevoxSuccess(makeFakeWav(24_000, 1, 16, 1.25));
+
+    const result = await synthesizeScript(singleCueScript, { outputDir });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value.cues[0]?.chunks).toEqual([
+      { text: singleCueScript.opening, durationSec: expect.closeTo(1.25, 5) },
+    ]);
   });
 });
 

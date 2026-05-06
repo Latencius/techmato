@@ -2,6 +2,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Article } from "@techmato/types";
 import { err, ok, type Result } from "neverthrow";
+import { buildVtt } from "../captions/captions.js";
 import type { HistoryStore } from "../history/historyStore.js";
 import type { MergeError } from "../merge/merge.js";
 import type { ScriptError } from "../script/script.js";
@@ -193,6 +194,9 @@ export async function runBroadcast(
       script,
       mergeResult: mergeResult.value,
       generatedAt,
+      onWarn: (message) => {
+        options.onProgress?.({ type: "warn", stage: "write", message });
+      },
     });
   } catch (cause) {
     return fail(
@@ -301,6 +305,7 @@ async function writeArtifacts({
   script,
   mergeResult,
   generatedAt,
+  onWarn,
 }: {
   outputDir: string;
   broadcastId: string;
@@ -308,6 +313,7 @@ async function writeArtifacts({
   script: Parameters<typeof renderScriptText>[0];
   mergeResult: Parameters<typeof formatSegmentsJson>[1];
   generatedAt: Date;
+  onWarn?: (message: string) => void;
 }): Promise<void> {
   await writeFile(
     join(outputDir, "script.txt"),
@@ -324,6 +330,16 @@ async function writeArtifacts({
     `${JSON.stringify(formatSegmentsJson(broadcastId, mergeResult, generatedAt), null, 2)}\n`,
     "utf8",
   );
+
+  try {
+    await writeFile(join(outputDir, "captions.vtt"), buildVtt(mergeResult.subtitleCues), "utf8");
+  } catch (cause) {
+    onWarn?.(
+      `Captions write failed: ${
+        cause instanceof Error ? cause.message : "Failed to write captions.vtt"
+      }`,
+    );
+  }
 }
 
 function enrichSelections(selected: Selection[], enrichedArticles: Article[]): Selection[] {
