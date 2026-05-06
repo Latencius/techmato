@@ -194,9 +194,9 @@ function parseScriptResponse(text: string): BroadcastScript | undefined {
     }
 
     return {
-      opening: parsed.opening,
+      opening: sanitizeNarration(parsed.opening),
       segments,
-      closing: parsed.closing,
+      closing: sanitizeNarration(parsed.closing),
     };
   } catch {
     return undefined;
@@ -223,11 +223,18 @@ function parseSegments(segments: unknown[]): ScriptSegment[] | undefined {
     parsedSegments.push({
       title: segment.title,
       url: segment.url,
-      narration: segment.narration,
+      narration: sanitizeNarration(segment.narration),
     });
   }
 
   return parsedSegments;
+}
+
+function sanitizeNarration(text: string): string {
+  return text
+    .replace(/\[[A-Z0-9_]+\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function stripJsonFence(text: string): string {

@@ -248,6 +248,102 @@ describe("generateScript", () => {
     expect(result.value).toEqual(validScript);
   });
 
+  it("strips control markers from opening text", async () => {
+    mockScript({
+      ...validScript,
+      opening: "Opening. [NEWS_BREAK]",
+    });
+
+    const result = await generateScript(articles, new Date(), "short", TEST_API_KEY);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value.opening).toBe("Opening.");
+  });
+
+  it("strips multiple control markers from segment narration", async () => {
+    mockScript({
+      ...validScript,
+      segments: [
+        {
+          title: "First story",
+          url: "https://example.com/first",
+          narration: "Body. [NEWS_BREAK] Next. [NEWS_BREAK]",
+        },
+      ],
+    });
+
+    const result = await generateScript(articles, new Date(), "short", TEST_API_KEY);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value.segments[0]?.narration).toBe("Body. Next.");
+  });
+
+  it("strips other uppercase control markers from generated text", async () => {
+    mockScript({
+      ...validScript,
+      closing: "[BREAK] Closing. [SECTION] [PAUSE_5S]",
+    });
+
+    const result = await generateScript(articles, new Date(), "short", TEST_API_KEY);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value.closing).toBe("Closing.");
+  });
+
+  it("keeps Japanese bracketed text in narration", async () => {
+    mockScript({
+      ...validScript,
+      segments: [
+        {
+          title: "First story",
+          url: "https://example.com/first",
+          narration: "通常の[テスト]文です。[NEWS_BREAK]",
+        },
+      ],
+    });
+
+    const result = await generateScript(articles, new Date(), "short", TEST_API_KEY);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value.segments[0]?.narration).toBe("通常の[テスト]文です。");
+  });
+
+  it("checks script length after removing control markers", async () => {
+    const scriptWithMarkerPadding: BroadcastScript = {
+      opening: "",
+      segments: [
+        {
+          title: "Marker padded story",
+          url: "https://example.com/marker-padded",
+          narration: `${"a".repeat(430)} ${"[NEWS_BREAK] ".repeat(20)}`,
+        },
+      ],
+      closing: "",
+    };
+    mockScript(scriptWithMarkerPadding);
+
+    const result = await generateScript(articles, new Date(), "short", TEST_API_KEY);
+
+    expect(result.isOk()).toBe(true);
+    if (result.isErr()) {
+      throw new Error(result.error.message);
+    }
+    expect(result.value.segments[0]?.narration).toBe("a".repeat(430));
+    expect(createMessageMock).toHaveBeenCalledTimes(1);
+  });
+
   it("replaces CURRENT_TIME and STORIES_JSON in the prompt", async () => {
     mockScript(validScript);
 
