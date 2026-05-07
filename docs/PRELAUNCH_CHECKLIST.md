@@ -28,8 +28,13 @@
 - [ ] `pnpm test` 全 pass
 - [ ] `pnpm typecheck` clean
 - [ ] `pnpm lint` clean
-- [ ] `git log --all -p | grep "sk-ant-"` で API キー混入なし
-- [ ] `git log --all -p | grep "TURNSTILE_SECRET"` で Secret Key 混入なし
+- [ ] シークレット混入なし (PowerShell):
+  - `git log --all -p | Select-String "sk-ant-"`
+  - `git log --all -p | Select-String "TURNSTILE_SECRET"`
+  - 出力が無ければ OK
+- [ ] シークレット混入なし (bash/zsh の場合):
+  - `git log --all -p | grep "sk-ant-"`
+  - `git log --all -p | grep "TURNSTILE_SECRET"`
 - [ ] `output/` ディレクトリが `.gitignore` に含まれている
 
 ### 1.2 環境準備
