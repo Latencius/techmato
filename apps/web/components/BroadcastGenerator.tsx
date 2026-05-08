@@ -300,8 +300,6 @@ export function BroadcastGenerator() {
         </div>
       ) : null}
 
-      {state.generation.broadcastId ? <ProgressIndicator state={progress} /> : null}
-
       {state.player ? (
         <BroadcastPlayer
           broadcastId={state.player.broadcastId}
@@ -309,6 +307,8 @@ export function BroadcastGenerator() {
           onRegenerate={() => dispatch({ type: "reset" })}
         />
       ) : null}
+
+      {state.generation.broadcastId ? <ProgressIndicator state={progress} /> : null}
 
       <SettingsModal
         open={state.settingsOpen}
